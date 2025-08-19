@@ -1,0 +1,58 @@
+# Specifies the version of the Docker Compose file format. '3.8' is a modern, stable version.
+version: '3.8'
+
+# This is the main section where we define our individual services (containers).
+services:
+
+  # --- Service 1: The 'rollX' Next.js Frontend ---
+  # This is a custom name we give to our Next.js service.
+  rollx:
+    # The 'build' instruction tells Docker Compose how to create the image for this service.
+    build:
+      # 'context' specifies the directory where the source code and Dockerfile are located.
+      context: ./rollX
+    # The 'ports' section maps ports from your host machine to the container.
+    # Format is "HOST_PORT:CONTAINER_PORT".
+    # This line makes `localhost:3000` on your machine connect to port 3000 inside the container.
+    ports:
+      - "3000:3000"
+    # 'restart: always' is a policy that tells Docker to automatically restart this
+    # container if it ever stops (e.g., due to a crash or a server reboot).
+    restart: always
+    # 'env_file' tells Docker Compose to load environment variables from a file.
+    # Both services will load variables from the same root .env file,
+    # which is great for sharing secrets like JWT_SECRET.
+    env_file:
+      - ./.env
+    # 'depends_on' creates a dependency between services.
+    # This line ensures that Docker will start the 'ws-server' container
+    # *before* it starts the 'rollx' container. This is useful because our
+    # frontend might try to connect to the backend on startup.
+    depends_on:
+      - ws-server
+    # 'networks' connects this service to a specific virtual network.
+    # Containers on the same network can discover and communicate with each other
+    # using their service names as hostnames (e.g., `ws-server:3001`).
+    networks:
+      - app-network
+
+  # --- Service 2: The 'ws-server' WebSocket Backend ---
+  # This is the custom name for our WebSocket service.
+  ws-server:
+    build:
+      context: ./ws-server # Looks for the Dockerfile in the './ws-server' directory.
+    ports:
+      - "3001:3001" # Maps `localhost:3001` to port 3001 inside the container.
+    restart: always
+    env_file:
+      - ./.env # This service also loads variables from the same .env file.
+    networks:
+      - app-network # Also connected to the same network as the frontend.
+
+# This section defines the virtual networks our services will use.
+networks:
+  # We are defining a single network named 'app-network'.
+  app-network:
+    # 'driver: bridge' is the standard network driver that creates a private,
+    # internal network for your containers.
+    driver: bridge
