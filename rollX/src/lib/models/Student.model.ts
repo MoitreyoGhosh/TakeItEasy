@@ -21,6 +21,17 @@ const StudentSchema: Schema = new Schema(
       uppercase: true,
       trim: true,
     },
+    universityName: {
+      type: String,
+      required: [true, "University Name is required."],
+      trim: true,
+    },
+    universityRollNo: {
+      type: String,
+      required: [true, "University Roll No. is required."],
+      unique: true,
+      trim: true,
+    },
     classRollNo: {
       type: String,
       trim: true,

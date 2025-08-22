@@ -1,5 +1,6 @@
-import bcrypt from "bcryptjs";
 import mongoose, { Schema, Document } from "mongoose";
+import "@/lib/models/Student.model";
+import "@/lib/models/Host.model";
 
 // Interface for TypeScript type safety
 export interface IUser extends Document {
@@ -59,33 +60,32 @@ const UserSchema: Schema = new Schema(
   { timestamps: true }
 );
 
-// Add this middleware to automatically hash the password before saving
-UserSchema.pre<IUser>("save", async function (next) {
-  // Only hash the password if it has been modified (or is new)
-  if (!this.isModified("password") || !this.password) {
-    return next();
-  }
+// // Add this middleware to automatically hash the password before saving
+// UserSchema.pre<IUser>("save", async function (next) {
+//   // Check if the password was modified and is not already a hash
+//   const isAlreadyHashed =
+//     this.password &&
+//     (this.password.startsWith("$2a$") || this.password.startsWith("$2b$"));
 
-  try {
-    console.log(
-      "1. Password has been modified. Value BEFORE hashing:",
-      this.password
-    );
-    // Hash the password with a salt round of 10
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
+//   if (!this.isModified("password") || !this.password || isAlreadyHashed) {
+//     return next();
+//   }
 
-    next();
-  } catch (error: unknown) {
-    console.error("Error hashing password:", error);
-    console.error("--- [USER MODEL - HASHING ERROR] ---");
-    if (error instanceof Error) {
-      next(error);
-    } else {
-      next(new Error("Unknown error occurred."));
-    }
-  }
-});
+//   // If we reach here, it's a new plaintext password that needs hashing.
+//   try {
+//     const salt = await bcrypt.genSalt(10);
+//     this.password = await bcrypt.hash(this.password, salt);
+//     next();
+//   } catch (error: unknown) {
+//     console.error("Error hashing password:", error);
+//     console.error("--- [USER MODEL - HASHING ERROR] ---");
+//     if (error instanceof Error) {
+//       next(error);
+//     } else {
+//       next(new Error("Unknown error occurred."));
+//     }
+//   }
+// });
 
 export default mongoose.models.User ||
   mongoose.model<IUser>("User", UserSchema);

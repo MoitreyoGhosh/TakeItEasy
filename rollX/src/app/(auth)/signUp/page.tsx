@@ -66,7 +66,7 @@ export default function SignUpPage() {
         {!selectedRole && (
           <>
             <CardHeader className="text-center pt-16">
-              <CardTitle className="text-2xl">Join takeiteasy</CardTitle>
+              <CardTitle className="text-2xl">Join TakeItEasy</CardTitle>
               <CardDescription>
                 How will you be using our platform?
               </CardDescription>
