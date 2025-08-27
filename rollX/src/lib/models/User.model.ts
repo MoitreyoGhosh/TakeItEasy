@@ -60,32 +60,5 @@ const UserSchema: Schema = new Schema(
   { timestamps: true }
 );
 
-// // Add this middleware to automatically hash the password before saving
-// UserSchema.pre<IUser>("save", async function (next) {
-//   // Check if the password was modified and is not already a hash
-//   const isAlreadyHashed =
-//     this.password &&
-//     (this.password.startsWith("$2a$") || this.password.startsWith("$2b$"));
-
-//   if (!this.isModified("password") || !this.password || isAlreadyHashed) {
-//     return next();
-//   }
-
-//   // If we reach here, it's a new plaintext password that needs hashing.
-//   try {
-//     const salt = await bcrypt.genSalt(10);
-//     this.password = await bcrypt.hash(this.password, salt);
-//     next();
-//   } catch (error: unknown) {
-//     console.error("Error hashing password:", error);
-//     console.error("--- [USER MODEL - HASHING ERROR] ---");
-//     if (error instanceof Error) {
-//       next(error);
-//     } else {
-//       next(new Error("Unknown error occurred."));
-//     }
-//   }
-// });
-
 export default mongoose.models.User ||
   mongoose.model<IUser>("User", UserSchema);

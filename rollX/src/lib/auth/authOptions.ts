@@ -88,8 +88,8 @@ export const authOptions: NextAuthOptions = {
           token.role = dbUser.role;
           token.profileComplete = dbUser.profileComplete;
         } else if (account.provider === "credentials") {
-          if (user._id) {
-            token.id = user._id.toString();
+          if (user.id) {
+            token.id = user.id;
           }
           token.role = user.role;
           token.profileComplete = user.profileComplete;
