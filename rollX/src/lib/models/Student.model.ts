@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface IStudent extends Document {
   user: mongoose.Schema.Types.ObjectId;
+  fullName: string;
   universityName: string;
   universityRollNo: string;
   classRollNo?: string;
