@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
     // 2. Input Parsing and Validation
     const body = await request.json();
-    const { groupName, capacity } = body;
+    const { groupName, description, capacity } = body;
 
     if (
       !groupName ||
@@ -75,14 +75,19 @@ export async function POST(request: Request) {
     }
 
     // 4. Database Operation: Create and save the new group
-    const newGroup = new Group({
+    const groupData = {
       groupName: groupName.trim(),
       capacity,
       joinCode,
       owner: session.user.id,
       members: [], // A new group starts with no members
-    });
+      // Conditionally add description if it's a valid, non-empty string
+      ...(description &&
+        typeof description === "string" &&
+        description.trim().length > 0 && { description: description.trim() }),
+    };
 
+    const newGroup = new Group(groupData);
     await newGroup.save();
 
     return NextResponse.json(

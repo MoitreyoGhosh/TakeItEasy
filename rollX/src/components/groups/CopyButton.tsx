@@ -8,7 +8,9 @@ import { toast } from "sonner";
 export function CopyButton({ textToCopy }: { textToCopy: string }) {
   const [isCopied, setIsCopied] = useState(false);
 
-  const handleCopy = async () => {
+  const handleCopy = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
     try {
       await navigator.clipboard.writeText(textToCopy);
       setIsCopied(true);

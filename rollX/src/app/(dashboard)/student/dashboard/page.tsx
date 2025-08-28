@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
 
 export default function StudentDashboardPage() {
   return (
-    <div className="container mx-auto p-4 md:p-8">
+    <div className="container mx-auto p-2 md:p-4 lg:p-8">
       <div className="flex flex-wrap gap-4 items-center justify-between mb-8">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">
@@ -35,7 +35,7 @@ export default function StudentDashboardPage() {
         </div>
       </div>
 
-      <div className="mb-12 max-w-md">
+      <div className="mb-8 max-w-md">
         <JoinGroupForm />
       </div>
 

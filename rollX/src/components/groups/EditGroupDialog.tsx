@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,22 +11,43 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
-export function CreateGroupDialog() {
-  const router = useRouter();
+// The group prop will not include the large 'members' array for efficiency
+type GroupForEdit = {
+  _id: string;
+  groupName: string;
+  description?: string;
+  capacity: number;
+};
 
-  const [open, setOpen] = useState(false);
-  const [groupName, setGroupName] = useState("");
-  const [capacity, setCapacity] = useState(65);
-  const [description, setDescription] = useState("");
+type EditGroupDialogProps = {
+  group: GroupForEdit;
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void;
+};
+
+export function EditGroupDialog({
+  group,
+  isOpen,
+  setIsOpen,
+}: EditGroupDialogProps) {
+  const router = useRouter();
+  const [groupName, setGroupName] = useState(group.groupName);
+  const [description, setDescription] = useState(group.description || "");
+  const [capacity, setCapacity] = useState(group.capacity);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Effect to sync state if the underlying group prop changes
+  useEffect(() => {
+    setGroupName(group.groupName);
+    setDescription(group.description || "");
+    setCapacity(group.capacity);
+  }, [group]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,8 +66,8 @@ export function CreateGroupDialog() {
     }
 
     try {
-      const response = await fetch("/api/groups/create", {
-        method: "POST",
+      const response = await fetch(`/api/groups/${group._id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ groupName, description, capacity }),
       });
@@ -57,74 +78,57 @@ export function CreateGroupDialog() {
         throw new Error(data.message || "Something went wrong");
       }
 
-      // <-- 2. Use the simpler Sonner API
-      toast.success(`Group "${data.group.groupName}" has been created.`);
-
-      setOpen(false);
-      setGroupName("");
-      setDescription("");
-      setCapacity(50);
+      toast.success(`Group "${data.group.groupName}" has been updated.`);
+      setIsOpen(false);
       router.refresh();
     } catch (err: unknown) {
-      setError((err as Error).message);
-      // <-- 3. Use toast.error for destructive feedback
-      toast.error((err as Error).message || "Failed to create group.");
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to update group.";
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="lg">
-          <PlusCircle className="mr-2 h-4 w-4" /> Create New Group
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Create a New Group</DialogTitle>
+            <DialogTitle>Edit Group</DialogTitle>
             <DialogDescription>
-              Give your group a name and set the total capacity. You can share
-              the join code after creation.
+              Update the details for your group. Changes will be visible to all
+              members.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="groupName" className="text-right">
-                Group Name
-              </Label>
+            <div className="space-y-2">
+              <Label htmlFor="groupName-edit">Group Name</Label>
               <Input
-                id="groupName"
+                id="groupName-edit"
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                className="col-span-3"
-                placeholder="e.g., CS101 - Fall Semester"
                 disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description">Description (Optional)</Label>
+              <Label htmlFor="description-edit">Description</Label>
               <Textarea
-                id="description"
+                id="description-edit"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g., Section B, Tuesdays 10 AM"
                 disabled={isSubmitting}
                 className="resize-none"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="capacity" className="text-right">
-                Capacity
-              </Label>
+            <div className="space-y-2">
+              <Label htmlFor="capacity-edit">Capacity</Label>
               <Input
-                id="capacity"
+                id="capacity-edit"
                 type="number"
                 value={capacity}
                 onChange={(e) => setCapacity(Number(e.target.value))}
-                className="col-span-3"
                 min="1"
                 disabled={isSubmitting}
               />
@@ -134,8 +138,16 @@ export function CreateGroupDialog() {
             <p className="text-sm text-red-500 text-center mb-4">{error}</p>
           )}
           <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Creating..." : "Create Group"}
+              {isSubmitting ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </form>

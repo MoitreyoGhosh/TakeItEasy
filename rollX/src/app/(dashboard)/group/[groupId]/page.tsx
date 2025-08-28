@@ -113,7 +113,7 @@ export default async function GroupDetailPage({ params }: PageProps) {
   const serializedGroup = JSON.parse(JSON.stringify(groupData));
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
+    <div className="container mx-auto p-2 md:p-4">
       {isOwner ? (
         <HostGroupView group={serializedGroup} />
       ) : (

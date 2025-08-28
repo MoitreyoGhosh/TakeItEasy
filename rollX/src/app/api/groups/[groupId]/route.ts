@@ -11,7 +11,7 @@ interface PopulatedMember {
   _id: mongoose.Types.ObjectId;
   name: string;
   email: string;
-  profile?: Pick<IStudent, "universityRollNo" | "classRollNo" > | null;
+  profile?: Pick<IStudent, "universityRollNo" | "classRollNo"> | null;
 }
 
 interface PopulatedGroup {
@@ -20,6 +20,7 @@ interface PopulatedGroup {
   members: PopulatedMember[];
 }
 
+// GET group by ID
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ groupId: string }> }
@@ -74,16 +75,173 @@ export async function GET(
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    // Sort by classRollNo if available, otherwise universityRollNo
-    group.members.sort((a, b) => {
+    // Create a new sorted array to avoid mutating fetched data.
+    const sortedMembers = [...group.members].sort((a, b) => {
       const rollA = a.profile?.classRollNo ?? a.profile?.universityRollNo ?? "";
       const rollB = b.profile?.classRollNo ?? b.profile?.universityRollNo ?? "";
       return rollA.localeCompare(rollB, undefined, { numeric: true });
     });
 
-    return NextResponse.json({ group }, { status: 200 });
+    const responseGroup = { ...group, members: sortedMembers };
+
+    return NextResponse.json({ group: responseGroup }, { status: 200 });
   } catch (error) {
     console.error(`Error fetching group ${groupId}:`, error);
+    return NextResponse.json(
+      { message: "An internal server error occurred." },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH group by ID
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ groupId: string }> }
+) {
+  let groupId: string = "";
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== "Host") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
+    await connectToDatabase();
+
+    const resolvedParams = await params;
+    groupId = resolvedParams.groupId;
+
+    if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      return NextResponse.json(
+        { message: "Invalid Group ID" },
+        { status: 400 }
+      );
+    }
+
+    // Fetch the group (Not needed).
+    // const group = await Group.findById(groupId).lean();
+
+    // if (!group) {
+    //   return NextResponse.json({ message: "Group not found" }, { status: 404 });
+    // }
+
+    // // Authorization
+    // if (group.owner.toString() !== session.user.id) {
+    //   return NextResponse.json(
+    //     { message: "Forbidden: You are not the owner of this group" },
+    //     { status: 403 }
+    //   );
+    // }
+
+    // Update group details
+    const body = await request.json();
+    const { groupName, description, capacity } = body;
+
+    // Validation
+    if (!groupName || groupName.trim().length === 0) {
+      return NextResponse.json(
+        { message: "Group name is required" },
+        { status: 400 }
+      );
+    }
+    if (capacity < 1) {
+      return NextResponse.json(
+        { message: "Capacity must be at least 1" },
+        { status: 400 }
+      );
+    }
+
+    const updatedGroup = await Group.findOneAndUpdate(
+      { _id: groupId, owner: session.user.id }, // Atomic authorization check
+      {
+        $set: {
+          // Use $set for a clean update
+          groupName: groupName.trim(),
+          description: description?.trim(),
+          capacity: capacity,
+        },
+      },
+      { new: true } // Return the updated document
+    ).lean();
+
+    if (!updatedGroup) {
+      return NextResponse.json(
+        { message: "Group not found or you are not the owner" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(
+      { message: "Group updated successfully", group: updatedGroup },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error(`Error updating group ${groupId}:`, error);
+    return NextResponse.json(
+      { message: "An internal server error occurred." },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE group by ID
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ groupId: string }> }
+) {
+  let groupId: string = "";
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== "Host") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
+    await connectToDatabase();
+
+    const resolvedParams = await params;
+    groupId = resolvedParams.groupId;
+
+    if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      return NextResponse.json(
+        { message: "Invalid Group ID" },
+        { status: 400 }
+      );
+    }
+
+    // Fetch the group (Not needed).
+    // const group = await Group.findById(groupId).lean();
+
+    // if (!group) {
+    //   return NextResponse.json({ message: "Group not found" }, { status: 404 });
+    // }
+
+    // // Authorization
+    // if (group.owner.toString() !== session.user.id) {
+    //   return NextResponse.json(
+    //     { message: "Forbidden: You are not the owner of this group" },
+    //     { status: 403 }
+    //   );
+    // }
+
+    // Delete the group
+    const result = await Group.findOneAndDelete({
+      _id: groupId,
+      owner: session.user.id, // Atomic authorization check
+    });
+
+    if (!result) {
+      return NextResponse.json(
+        { message: "Group not found or you are not the owner" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(
+      { message: "Group deleted successfully" },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error(`Error deleting group ${groupId}:`, error);
     return NextResponse.json(
       { message: "An internal server error occurred." },
       { status: 500 }

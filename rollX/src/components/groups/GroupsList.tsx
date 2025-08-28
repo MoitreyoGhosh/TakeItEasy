@@ -1,7 +1,8 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth/authOptions";
 import Group, { IGroupLean } from "@/lib/models/Group.model";
-import mongoose from "mongoose";
+import User from "@/lib/models/User.model";
+import Host from "@/lib/models/Host.model";
 import { GroupCard } from "./GroupCard";
 import { connectToDatabase } from "@/lib/db";
 import { unstable_noStore as noStore } from "next/cache";
@@ -27,6 +28,16 @@ export async function GroupsList() {
         .lean<IGroupLean[]>();
     } else {
       groups = await Group.find({ members: session.user.id })
+        .populate({
+          path: "owner",
+          model: User,
+          select: "profile", // We need the 'profile' field
+          populate: {
+            path: "profile", // Populate the nested profile
+            model: Host,
+            select: "fullName", // Get the host's actual name
+          },
+        })
         .sort({ createdAt: -1 })
         .lean<IGroupLean[]>();
     }

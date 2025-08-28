@@ -99,7 +99,7 @@ export function MembersTable({ members, groupId }: MembersTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              {/* ✅ UPDATED TABLE HEADERS */}
+              {/* TABLE HEADERS */}
               <TableHead className="w-[150px]">Roll No.</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>University Roll No.</TableHead>

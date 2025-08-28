@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, models, Model, Types } from "mongoose";
 export interface IGroupLean {
   _id: mongoose.Types.ObjectId;
   groupName: string;
+  description?: string;
   joinCode: string;
   owner: mongoose.Types.ObjectId;
   members: mongoose.Types.ObjectId[];
@@ -17,6 +18,7 @@ export interface IGroup extends Document {
   owner: Types.ObjectId;
   members: Types.ObjectId[];
   capacity: number;
+  description: string;
 }
 
 const GroupSchema: Schema<IGroup> = new Schema(
@@ -49,6 +51,11 @@ const GroupSchema: Schema<IGroup> = new Schema(
       required: [true, "Group capacity is required"],
       min: [1, "Capacity must be at least 1."],
       default: 65, // A sensible default
+    },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: [250, "Description cannot be more than 250 characters."],
     },
   },
   {

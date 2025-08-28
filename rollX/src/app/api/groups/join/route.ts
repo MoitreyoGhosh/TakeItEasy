@@ -1,5 +1,3 @@
-// in rollX\src\app\api\groups\join\route.ts
-
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth/authOptions";

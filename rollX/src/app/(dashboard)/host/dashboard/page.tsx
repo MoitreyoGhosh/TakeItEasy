@@ -24,8 +24,8 @@ export const dynamic = "force-dynamic";
 
 export default function HostDashboardPage() {
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <div className="flex flex-wrap gap-4 items-center justify-between mb-8">
+    <div className="container mx-auto p-2 md:p-4">
+      <div className="flex flex-wrap gap-4 items-center justify-between mb-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Host Dashboard</h2>
           <p className="text-muted-foreground">

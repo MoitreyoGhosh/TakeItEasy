@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -6,14 +5,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Hash, Users, PlayCircle } from "lucide-react";
+import { Hash, Users } from "lucide-react";
 import { MembersTable } from "./MembersTable";
 import { CopyButton } from "./CopyButton";
+import { GroupHeaderActions } from "./GroupHeaderActions";
 
 // Define a type for the serialized group data
 type SerializedGroup = {
   _id: string;
   groupName: string;
+  description?: string;
   joinCode: string;
   capacity: number;
   members: {
@@ -29,26 +30,13 @@ type SerializedGroup = {
 };
 
 export function HostGroupView({ group }: { group: SerializedGroup }) {
+  // We need to destructure the group to pass a smaller object to GroupHeaderActions
+  const { ...groupInfo } = group;
   return (
     <div className="space-y-8">
-      {/* Header Section */}
-      <div className="flex flex-wrap gap-4 items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">
-            {group.groupName}
-          </h2>
-          <p className="text-muted-foreground">
-            Manage your group and view your roster.
-          </p>
-        </div>
-        <Button size="lg">
-          <PlayCircle className="mr-2 h-5 w-5" />
-          Start Attendance Session
-        </Button>
-      </div>
+      <GroupHeaderActions group={groupInfo} />
 
-      {/* Info Cards Section */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Join Code</CardTitle>
@@ -56,12 +44,14 @@ export function HostGroupView({ group }: { group: SerializedGroup }) {
               Share this code with your participants.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex items-center w-full justify-between text-2xl font-mono bg-muted p-4 rounded-md">
-            <span className="flex items-center gap-2">
-              <Hash className="h-6 w-6" />
-              {group.joinCode}
-            </span>
-            <CopyButton textToCopy={group.joinCode} />
+          <CardContent>
+            <div className="flex items-center w-full justify-between text-2xl font-mono bg-muted p-4 rounded-md">
+              <span className="flex items-center gap-2">
+                <Hash className="h-6 w-6" />
+                {group.joinCode}
+              </span>
+              <CopyButton textToCopy={group.joinCode} />
+            </div>
           </CardContent>
         </Card>
         <Card>
