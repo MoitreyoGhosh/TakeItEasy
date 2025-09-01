@@ -12,6 +12,7 @@ import {
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { EditGroupDialog } from "./EditGroupDialog";
 import { DeleteGroupDialog } from "./DeleteGroupDialog";
+import { ISchedule } from "@/lib/models/Group.model";
 
 // Define the type for the group data this component needs
 type GroupForCardActions = {
@@ -19,6 +20,9 @@ type GroupForCardActions = {
   groupName: string;
   description?: string;
   capacity: number;
+  groupType: "Class" | "Event";
+  schedules?: ISchedule[];
+  eventTime?: { start?: Date | string; end?: Date | string };
 };
 
 type HostGroupCardActionsProps = {
@@ -60,10 +64,10 @@ export function HostGroupCardActions({ group }: HostGroupCardActionsProps) {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            className="text-destructive focus:text-destructive-foreground focus:bg-destructive"
+            className="text-destructive focus:text-destructive-foreground focus:bg-destructive hover:text-white"
             onClick={() => setIsDeleteDialogOpen(true)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
+            <Trash2 className="mr-2 h-4 w-4 hover:text-white" />
             <span>Delete</span>
           </DropdownMenuItem>
         </DropdownMenuContent>

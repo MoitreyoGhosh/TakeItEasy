@@ -25,12 +25,16 @@ import {
 } from "lucide-react";
 import { EditGroupDialog } from "./EditGroupDialog";
 import { DeleteGroupDialog } from "./DeleteGroupDialog";
+import { ISchedule } from "@/lib/models/Group.model";
 
 type GroupForHeader = {
   _id: string;
   groupName: string;
   description?: string;
   capacity: number;
+  groupType: "Class" | "Event";
+  schedules?: ISchedule[];
+  eventTime?: { start?: Date | string; end?: Date | string };
 };
 
 type GroupHeaderActionsProps = {
@@ -50,7 +54,7 @@ function InlineDescriptionForm({
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
-    // We use .trim() to ensure whitespace changes don't trigger an API call.
+    //.trim() is used to ensure whitespace changes don't trigger an API call.
     const originalDescription = group.description || "";
     if (description.trim() === originalDescription.trim()) {
       onCancel(); // Simply close the form if nothing changed.
@@ -90,7 +94,7 @@ function InlineDescriptionForm({
         onChange={(e) => setDescription(e.target.value)}
         className="resize-none"
         disabled={isSaving}
-        autoFocus // Automatically focus the textarea when it appears
+        autoFocus
       />
       <div className="flex items-center justify-end space-x-2">
         <Button
@@ -144,10 +148,10 @@ export function GroupHeaderActions({ group }: GroupHeaderActionsProps) {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="text-destructive focus:text-destructive-foreground focus:bg-destructive"
+              className="text-destructive focus:text-destructive-foreground focus:bg-destructive hover:text-white"
               onClick={() => setIsDeleteDialogOpen(true)}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="mr-2 h-4 w-4 hover:text-white" />
               <span>Delete Group</span>
             </DropdownMenuItem>
           </DropdownMenuContent>

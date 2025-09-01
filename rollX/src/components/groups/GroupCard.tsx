@@ -7,10 +7,26 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Users, Hash, UserCircle, CheckCircle2 } from "lucide-react";
+import {
+  Users,
+  Hash,
+  UserCircle,
+  Clock,
+  Calendar,
+  CheckCircle2,
+  BookOpen,
+  CalendarDays,
+  Radio,
+} from "lucide-react";
 import { CopyButton } from "./CopyButton";
 import { HostGroupCardActions } from "./HostGroupCardActions";
 import { StudentGroupCardActions } from "./StudentGroupCardActions";
+import { daysOfWeekValues } from "@/lib/utils/constants";
+import {
+  formatEventDisplayTime,
+  formatScheduleTime,
+  getScheduleStatus,
+} from "@/lib/utils/time";
 
 type GroupCardProps = {
   group: {
@@ -20,44 +36,116 @@ type GroupCardProps = {
     joinCode: string;
     members: string[];
     capacity: number;
-    owner?: {
-      profile?: {
-        fullName: string;
-      };
-    };
+    owner?: { profile?: { fullName: string } };
+    groupType: "Class" | "Event";
+    schedules?: { dayOfWeek: number; startTime: string; endTime: string }[];
+    eventTime?: { start?: Date | string; end?: Date | string };
   };
   userRole: "Host" | "Student";
 };
 
 export function GroupCard({ group, userRole }: GroupCardProps) {
-  // Destructure to pass a smaller object to the actions component
-  const { ...groupInfo } = group;
+  const groupInfo = group;
   const isFull = group.members.length >= group.capacity;
+  const fullDayNames = daysOfWeekValues.map((day) => day.label);
+  const scheduleStatus = getScheduleStatus(group.schedules);
+
+  const renderSchedule = () => {
+  const mainTimeStyle = "font-semibold text-foreground truncate";
+
+  switch (scheduleStatus.status) {
+    case 'Live':
+      return (
+        <div className="flex flex-col items-end">
+          <span className="flex items-center gap-2 font-semibold text-red-500 animate-pulse">
+            <Radio className="h-4 w-4" />
+            Live now
+          </span>
+        </div>
+      );
+    case 'Upcoming':
+      return (
+        <div className="flex flex-col items-end -space-y-1">
+          <span className={mainTimeStyle}>
+            {formatScheduleTime(scheduleStatus.schedule!, fullDayNames)}
+          </span>
+          {scheduleStatus.remainingSchedules > 0 && (
+            <span className="text-xs text-muted-foreground font-normal">
+              (+{scheduleStatus.remainingSchedules} more)
+            </span>
+          )}
+        </div>
+      );
+    case 'None':
+    default:
+      return <span className={mainTimeStyle}>Not set</span>;
+  }
+};
+
   return (
-    <div className="relative">
-      <div className="absolute top-2 right-2 z-10">
-        {userRole === "Host" ? (
-          <HostGroupCardActions group={groupInfo} />
-        ) : (
-          <StudentGroupCardActions group={groupInfo} />
-        )}
+    <div className="relative h-full group">
+      {/* ellipsis */}
+      <div className="pointer-events-none absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="pointer-events-auto">
+          {userRole === "Host" ? (
+            <HostGroupCardActions group={groupInfo} />
+          ) : (
+            <StudentGroupCardActions group={groupInfo} />
+          )}
+        </div>
       </div>
 
       <Link
         href={`/group/${group._id}`}
-        className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="block h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
-        <Card className="flex flex-col justify-between h-full transition-all duration-300 group hover:shadow-lg hover:border-primary/50">
+        <Card className="flex flex-col h-full transition-all duration-300 hover:shadow-lg hover:border-primary/50">
+          {/* --- HEADER SECTION--- */}
           <CardHeader>
-            <CardTitle className="truncate group-hover:text-primary transition-colors pr-8">
+            <CardTitle className="truncate pr-10 group-hover:text-primary transition-colors">
               {group.groupName}
             </CardTitle>
-            <CardDescription className="line-clamp-2">
-              {group.description}
-            </CardDescription>
+
+            {/* Description and Badge */}
+            <div className="flex justify-between gap-4 pt-1 items-center">
+              <CardDescription className="line-clamp-2">
+                {group.description || "No description."}
+              </CardDescription>
+              <span
+                className={`flex items-center gap-1 flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap shadow-sm ${
+                  group.groupType === "Class"
+                    ? "bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 dark:from-blue-800 dark:to-blue-900 dark:text-blue-100"
+                    : "bg-gradient-to-r from-purple-100 to-pink-200 text-purple-800 dark:from-purple-800 dark:to-pink-900 dark:text-purple-100"
+                }`}
+              >
+                {group.groupType === "Class" ? (
+                  <BookOpen className="h-3.5 w-3.5" />
+                ) : (
+                  <CalendarDays className="h-3.5 w-3.5" />
+                )}
+
+                {group.groupType}
+              </span>
+            </div>
           </CardHeader>
-          <CardContent className="flex-grow pt-0 pb-2">
-            <div className="border-t border-border/50 pt-2 space-y-2">
+
+          {/* --- CONTENT SECTION --- */}
+          <CardContent className="flex-grow pt-2 border-t">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span className="flex items-center gap-2">
+                  {group.groupType === "Class" ? <Clock className="h-4 w-4" /> : <Calendar className="h-4 w-4" />}
+                  {group.groupType === "Class" ? "Schedule" : "Date & Time"}
+                </span>
+                
+                {group.groupType === "Class" ? (
+                  renderSchedule()
+                ) : (
+                  <span className="font-semibold text-foreground truncate">
+                    {formatEventDisplayTime(group.eventTime)}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span className="flex items-center gap-2">
                   <UserCircle className="h-4 w-4" />
@@ -85,22 +173,23 @@ export function GroupCard({ group, userRole }: GroupCardProps) {
             </div>
           </CardContent>
 
-          <CardFooter>
+          {/* --- FOOTER SECTION --- */}
+          <CardFooter className="border-t">
             {userRole === "Host" ? (
               <div className="flex flex-col w-full gap-1">
                 <div className="flex items-center justify-between text-md text-muted-foreground px-1">
                   <span>Join Code</span>
                 </div>
-                <div className="flex items-center w-full justify-between text-sm font-mono bg-muted/50 p-2 rounded-md">
-                  <span className="flex items-center gap-2">
-                    <Hash className="h-4 w-4" />
+                <div className="flex items-center w-full justify-between text-sm font-mono bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700">
+                  <span className="flex items-center gap-2 text-foreground">
+                    <Hash className="h-4 w-4 text-muted-foreground" />
                     {group.joinCode}
                   </span>
                   <CopyButton textToCopy={group.joinCode} />
                 </div>
               </div>
             ) : (
-              <div className="flex items-center space-x-2 text-sm font-medium text-green-600 dark:text-green-400">
+              <div className="flex items-center space-x-2 text-sm font-medium text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 className="h-4 w-4" />
                 <span>Enrolled</span>
               </div>

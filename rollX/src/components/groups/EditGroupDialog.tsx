@@ -15,6 +15,24 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { PlusCircle, Trash2 } from "lucide-react";
+import { daysOfWeekValues } from "@/lib/utils/constants";
+import {
+  generateTimeOptions,
+  validateTimeOrder,
+  toDateTimeLocal,
+} from "@/lib/utils/time";
+import { ISchedule } from "@/lib/models/Group.model";
+
+const timeOptions = generateTimeOptions(40);
 
 // The group prop will not include the large 'members' array for efficiency
 type GroupForEdit = {
@@ -22,6 +40,9 @@ type GroupForEdit = {
   groupName: string;
   description?: string;
   capacity: number;
+  groupType: "Class" | "Event";
+  schedules?: ISchedule[];
+  eventTime?: { start?: Date | string; end?: Date | string };
 };
 
 type EditGroupDialogProps = {
@@ -40,14 +61,46 @@ export function EditGroupDialog({
   const [description, setDescription] = useState(group.description || "");
   const [capacity, setCapacity] = useState(group.capacity);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [groupType, setGroupType] = useState(group.groupType);
+  const [schedules, setSchedules] = useState(group.schedules || []);
+  const [eventTime, setEventTime] = useState({
+    start: toDateTimeLocal(group.eventTime?.start),
+    end: toDateTimeLocal(group.eventTime?.end),
+  });
   const [error, setError] = useState("");
 
   // Effect to sync state if the underlying group prop changes
   useEffect(() => {
-    setGroupName(group.groupName);
-    setDescription(group.description || "");
-    setCapacity(group.capacity);
+    if (group) {
+      setGroupName(group.groupName);
+      setDescription(group.description || "");
+      setCapacity(group.capacity);
+      setGroupType(group.groupType);
+      setSchedules(group.schedules || []);
+      setEventTime({
+        start: toDateTimeLocal(group.eventTime?.start),
+        end: toDateTimeLocal(group.eventTime?.end),
+      });
+    }
   }, [group]);
+
+  // --- SCHEDULE HANDLERS ---
+  const handleAddSchedule = () =>
+    setSchedules([
+      ...schedules,
+      { dayOfWeek: 1, startTime: "10:00", endTime: "10:40" },
+    ]);
+  const handleRemoveSchedule = (index: number) =>
+    setSchedules(schedules.filter((_, i) => i !== index));
+  const handleScheduleChange = (
+    index: number,
+    field: keyof ISchedule,
+    value: string | number
+  ) => {
+    const newSchedules = [...schedules];
+    newSchedules[index] = { ...newSchedules[index], [field]: value };
+    setSchedules(newSchedules);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,12 +117,67 @@ export function EditGroupDialog({
       setIsSubmitting(false);
       return;
     }
+    if (groupType === "Class") {
+      if (schedules.length === 0) {
+        setError("At least one schedule is required for a class.");
+        setIsSubmitting(false);
+        return;
+      }
+      for (const s of schedules) {
+        if (!validateTimeOrder(s.startTime, s.endTime)) {
+          setError(
+            `Invalid time for ${
+              daysOfWeekValues[s.dayOfWeek]?.label
+            }. End time must be after start time.`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+    }
 
+    if (groupType === "Event") {
+      if (!eventTime.start) {
+        setError("Event start time is required.");
+        setIsSubmitting(false);
+        return;
+      }
+      if (!eventTime.end) {
+        setError("Event end time is required.");
+        setIsSubmitting(false);
+        return;
+      }
+      if (new Date(eventTime.end) <= new Date(eventTime.start)) {
+        setError("Event end time must be after the start time.");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    const payload: {
+      groupName: string;
+      description: string;
+      capacity: number;
+      groupType: "Class" | "Event";
+      schedules?: ISchedule[];
+      eventTime?: { start: string; end: string };
+    } = {
+      groupName,
+      description,
+      capacity,
+      groupType,
+    };
+    if (groupType === "Class") {
+      payload.schedules = schedules;
+    } else {
+      payload.eventTime = eventTime;
+    }
+    console.log("Payload for update:", payload);
     try {
       const response = await fetch(`/api/groups/${group._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupName, description, capacity }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -93,16 +201,60 @@ export function EditGroupDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Edit Group</DialogTitle>
             <DialogDescription>
-              Update the details for your group. Changes will be visible to all
-              members.
+              Update the details for your group.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-6 py-4 max-h-[65vh] overflow-y-auto pr-4 scrollbar-hide">
+            {/* --- GROUP TYPE SELECTION --- */}
+            <div className="space-y-2">
+              <Label>Group Type</Label>
+              <RadioGroup
+                value={groupType}
+                onValueChange={(value) =>
+                  setGroupType(value as "Class" | "Event")
+                }
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              >
+                <div>
+                  <RadioGroupItem
+                    value="Class"
+                    id="class-edit"
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor="class-edit"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                  >
+                    Class
+                    <span className="text-xs text-muted-foreground mt-1">
+                      Recurring schedule
+                    </span>
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem
+                    value="Event"
+                    id="event-edit"
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor="event-edit"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                  >
+                    Event
+                    <span className="text-xs text-muted-foreground mt-1">
+                      One-time occurrence
+                    </span>
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="groupName-edit">Group Name</Label>
               <Input
@@ -112,6 +264,7 @@ export function EditGroupDialog({
                 disabled={isSubmitting}
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="description-edit">Description</Label>
               <Textarea
@@ -122,6 +275,7 @@ export function EditGroupDialog({
                 className="resize-none"
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="capacity-edit">Capacity</Label>
               <Input
@@ -133,6 +287,116 @@ export function EditGroupDialog({
                 disabled={isSubmitting}
               />
             </div>
+
+            {/* --- CONDITIONAL SCHEDULE INPUTS --- */}
+            {groupType === "Class" ? (
+              <div className="space-y-4">
+                <Label>Weekly Schedule</Label>
+                {schedules.map((s, index) => (
+                  <div
+                    key={index}
+                    className="flex flex-row items-center gap-1 md:gap-2"
+                  >
+                    <Select
+                      value={String(s.dayOfWeek)}
+                      onValueChange={(value) =>
+                        handleScheduleChange(index, "dayOfWeek", Number(value))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Day" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {daysOfWeekValues.map((day) => (
+                          <SelectItem key={day.value} value={String(day.value)}>
+                            {day.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={s.startTime}
+                      onValueChange={(value) =>
+                        handleScheduleChange(index, "startTime", value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Start" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {timeOptions.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={s.endTime}
+                      onValueChange={(value) =>
+                        handleScheduleChange(index, "endTime", value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="End" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {timeOptions.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {schedules.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveSchedule(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddSchedule}
+                >
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Schedule
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="eventStart-edit">Start Time</Label>
+                  <Input
+                    id="eventStart-edit"
+                    type="datetime-local"
+                    value={eventTime.start}
+                    onChange={(e) =>
+                      setEventTime({ ...eventTime, start: e.target.value })
+                    }
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="eventEnd-edit">End Time</Label>
+                  <Input
+                    id="eventEnd-edit"
+                    type="datetime-local"
+                    value={eventTime.end}
+                    onChange={(e) =>
+                      setEventTime({ ...eventTime, end: e.target.value })
+                    }
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+            )}
           </div>
           {error && (
             <p className="text-sm text-red-500 text-center mb-4">{error}</p>
@@ -146,7 +410,7 @@ export function EditGroupDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="w-[40%]">
               {isSubmitting ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>

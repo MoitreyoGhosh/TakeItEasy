@@ -5,10 +5,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Hash, Users } from "lucide-react";
+import { Calendar, Clock, Hash, Users } from "lucide-react";
 import { MembersTable } from "./MembersTable";
 import { CopyButton } from "./CopyButton";
 import { GroupHeaderActions } from "./GroupHeaderActions";
+import { daysOfWeek } from "@/lib/utils/constants";
+import { Badge } from "@/components/ui/badge";
+import { formatFullSchedule, formatFullEventTime } from "@/lib/utils/time";
 
 // Define a type for the serialized group data
 type SerializedGroup = {
@@ -27,6 +30,9 @@ type SerializedGroup = {
       fullName?: string;
     };
   }[];
+  groupType: "Class" | "Event";
+  schedules?: { dayOfWeek: number; startTime: string; endTime: string }[];
+  eventTime?: { start?: Date | string; end?: Date | string };
 };
 
 export function HostGroupView({ group }: { group: SerializedGroup }) {
@@ -37,11 +43,40 @@ export function HostGroupView({ group }: { group: SerializedGroup }) {
       <GroupHeaderActions group={groupInfo} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* --- NEW, PROMINENT SCHEDULE/EVENT CARD --- */}
+          <Card className="md:col-span-2 lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {group.groupType === "Class" ? <Clock className="h-5 w-5" /> : <Calendar className="h-5 w-5" />}
+              {group.groupType === "Class" ? "Weekly Schedule" : "Event Time"}
+            </CardTitle>
+            <CardDescription>
+              {group.groupType === "Class" ? "Recurring class times." : "The date and time for this event."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {group.groupType === "Class" ? (
+              <div className="flex flex-wrap gap-2">
+                {group.schedules && group.schedules.length > 0 ? (
+                  group.schedules.map((s, i) => (
+                    <Badge key={i} variant="secondary" className="text-sm font-medium">
+                      {formatFullSchedule(s, daysOfWeek)}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-muted-foreground">No schedule set.</p>
+                )}
+              </div>
+            ) : (
+              <div className="font-medium text-foreground">{formatFullEventTime(group.eventTime)}</div>
+            )}
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Join Code</CardTitle>
             <CardDescription>
-              Share this code with your participants.
+              Share this code with participants.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -57,9 +92,7 @@ export function HostGroupView({ group }: { group: SerializedGroup }) {
         <Card>
           <CardHeader>
             <CardTitle>Roster</CardTitle>
-            <CardDescription>
-              Total members who have joined the group.
-            </CardDescription>
+            <CardDescription>Total members enrolled.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold flex items-center gap-2">

@@ -118,24 +118,16 @@ export async function PATCH(
       );
     }
 
-    // Fetch the group (Not needed).
-    // const group = await Group.findById(groupId).lean();
-
-    // if (!group) {
-    //   return NextResponse.json({ message: "Group not found" }, { status: 404 });
-    // }
-
-    // // Authorization
-    // if (group.owner.toString() !== session.user.id) {
-    //   return NextResponse.json(
-    //     { message: "Forbidden: You are not the owner of this group" },
-    //     { status: 403 }
-    //   );
-    // }
-
     // Update group details
     const body = await request.json();
-    const { groupName, description, capacity } = body;
+    const {
+      groupName,
+      description,
+      capacity,
+      groupType,
+      schedules,
+      eventTime,
+    } = body;
 
     // Validation
     if (!groupName || groupName.trim().length === 0) {
@@ -150,17 +142,77 @@ export async function PATCH(
         { status: 400 }
       );
     }
+    if (!groupType || !["Class", "Event"].includes(groupType)) {
+      return NextResponse.json(
+        { message: "A valid group type is required" },
+        { status: 400 }
+      );
+    }
+    if (groupType === "Class") {
+      // Check if schedules is a non-empty array
+      if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
+        return NextResponse.json(
+          { message: "At least one schedule is required for a class" },
+          { status: 400 }
+        );
+      }
+
+      // Validate every schedule object inside the array
+      for (const s of schedules) {
+        if (s.dayOfWeek === undefined || !s.startTime || !s.endTime) {
+          return NextResponse.json(
+            {
+              message:
+                "Each schedule entry must be complete (day, start time, end time)",
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+    if (
+      groupType === "Event" &&
+      (!eventTime || !eventTime.start || !eventTime.end)
+    ) {
+      return NextResponse.json(
+        { message: "A start and end time is required for an event" },
+        { status: 400 }
+      );
+    }
+
+    // Prepare the update object
+    interface UpdateData {
+      groupName: string;
+      description?: string;
+      capacity: number;
+      groupType: "Class" | "Event";
+      schedules?: typeof schedules | null;
+      eventTime?: typeof eventTime | null;
+    }
+
+    const updateData: UpdateData = {
+      groupName: groupName.trim(),
+      description: description?.trim(),
+      capacity: capacity,
+      groupType: groupType,
+    };
+
+    // Set the appropriate time fields based on group type
+    if (groupType === "Class") {
+      updateData.schedules = schedules;
+      updateData.eventTime = null; // Remove eventTime for class groups
+    } else {
+      // Event
+      updateData.eventTime = {
+        start: new Date(eventTime.start),
+        end: new Date(eventTime.end),
+      };
+      updateData.schedules = null; // Remove schedule for event groups
+    }
 
     const updatedGroup = await Group.findOneAndUpdate(
       { _id: groupId, owner: session.user.id }, // Atomic authorization check
-      {
-        $set: {
-          // Use $set for a clean update
-          groupName: groupName.trim(),
-          description: description?.trim(),
-          capacity: capacity,
-        },
-      },
+      { $set: updateData },
       { new: true } // Return the updated document
     ).lean();
 
@@ -207,21 +259,6 @@ export async function DELETE(
         { status: 400 }
       );
     }
-
-    // Fetch the group (Not needed).
-    // const group = await Group.findById(groupId).lean();
-
-    // if (!group) {
-    //   return NextResponse.json({ message: "Group not found" }, { status: 404 });
-    // }
-
-    // // Authorization
-    // if (group.owner.toString() !== session.user.id) {
-    //   return NextResponse.json(
-    //     { message: "Forbidden: You are not the owner of this group" },
-    //     { status: 403 }
-    //   );
-    // }
 
     // Delete the group
     const result = await Group.findOneAndDelete({

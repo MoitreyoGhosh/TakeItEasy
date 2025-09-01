@@ -1,7 +1,15 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Hourglass, LogOut, Settings, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  Clock,
+  Hourglass,
+  LogOut,
+  Settings,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { Button } from "../ui/button";
 import { LeaveGroupDialog } from "./LeaveGroupDialog";
@@ -12,6 +20,8 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useState } from "react";
+import { daysOfWeekValues } from "@/lib/utils/constants";
+import { formatFullSchedule, formatEventDisplayTime } from "@/lib/utils/time";
 
 type SerializedGroup = {
   _id: string;
@@ -24,10 +34,17 @@ type SerializedGroup = {
   };
   members: unknown[];
   capacity: number;
+  groupType: "Class" | "Event";
+  schedules?: { dayOfWeek: number; startTime: string; endTime: string }[];
+  eventTime?: { start?: Date | string; end?: Date | string };
 };
 
 export function ParticipantGroupView({ group }: { group: SerializedGroup }) {
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+
+  // Create the array of full day names from the constant
+  const fullDayNames = daysOfWeekValues.map((day) => day.label);
+
   return (
     <>
       <div className="flex flex-wrap gap-2 items-center justify-between">
@@ -60,14 +77,34 @@ export function ParticipantGroupView({ group }: { group: SerializedGroup }) {
 
       <div className="my-8">
         <h2 className="text-3xl font-bold tracking-tight">{group.groupName}</h2>
+        {group.description && (
+          <p className="mt-4 max-w-2xl text-foreground/80">
+            {group.description}
+          </p>
+        )}
         <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
           <span>
-            Hosted by: 
+            Hosted by:
             <strong>{group.owner.profile?.fullName || "Host"}</strong>
           </span>
           <span className="flex items-center gap-1.5">
             <Users className="h-4 w-4" />
             {group.members.length} / {group.capacity} members
+          </span>
+
+          <span className="flex items-center gap-1.5 font-medium text-foreground">
+            {group.groupType === "Class" ? (
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            )}
+            {group.groupType === "Class"
+              ? group.schedules && group.schedules.length > 0
+                ? group.schedules
+                    .map((s) => formatFullSchedule(s, fullDayNames))
+                    .join(" | ")
+                : "Schedule not set"
+              : formatEventDisplayTime(group.eventTime)}
           </span>
         </div>
       </div>
@@ -75,7 +112,7 @@ export function ParticipantGroupView({ group }: { group: SerializedGroup }) {
       <Card className="w-full max-w-lg mx-auto text-center">
         <CardHeader>
           <CardTitle className="flex items-center justify-center gap-2">
-            <Hourglass className="h-6 w-6" />
+            <Hourglass className="h-6 w-6 animate-spin-slow" />
             Session Not Started
           </CardTitle>
         </CardHeader>

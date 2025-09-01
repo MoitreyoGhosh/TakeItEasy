@@ -1,13 +1,26 @@
 import mongoose, { Schema, Document, models, Model, Types } from "mongoose";
 
+export interface ISchedule {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}
+
 export interface IGroupLean {
   _id: mongoose.Types.ObjectId;
   groupName: string;
+  groupType: string;
   description?: string;
   joinCode: string;
   owner: mongoose.Types.ObjectId;
   members: mongoose.Types.ObjectId[];
   capacity: number;
+  schedules?: ISchedule[];
+  eventTime?: {
+    start: Date;
+    end: Date;
+  };
+  lastSessionStartedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,8 +31,25 @@ export interface IGroup extends Document {
   owner: Types.ObjectId;
   members: Types.ObjectId[];
   capacity: number;
-  description: string;
+  groupType: string;
+  description?: string;
+  schedules?: ISchedule[];
+  eventTime?: {
+    start: Date;
+    end: Date;
+  };
+  lastSessionStartedAt?: Date;
 }
+
+// Schedule Schema 
+const ScheduleSchema: Schema<ISchedule> = new Schema(
+  {
+    dayOfWeek: { type: Number, required: true, min: 0, max: 6 },
+    startTime: { type: String, required: true },
+    endTime: { type: String, required: true },
+  },
+  { _id: false }
+); // _id: false is important for sub-documents in an array
 
 const GroupSchema: Schema<IGroup> = new Schema(
   {
@@ -56,6 +86,22 @@ const GroupSchema: Schema<IGroup> = new Schema(
       type: String,
       trim: true,
       maxlength: [250, "Description cannot be more than 250 characters."],
+    },
+    groupType: {
+      type: String,
+      enum: ["Class", "Event"],
+      required: true,
+    },
+    schedules: {
+      type: [ScheduleSchema],
+      default: undefined,
+    },
+    eventTime: {
+      start: Date,
+      end: Date,
+    },
+    lastSessionStartedAt: {
+      type: Date,
     },
   },
   {

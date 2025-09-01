@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth/authOptions";
 import { connectToDatabase } from "@/lib/db";
-import Group from "@/lib/models/Group.model";
+import Group, { ISchedule } from "@/lib/models/Group.model";
 import { customAlphabet } from "nanoid";
 
 /**
@@ -33,7 +33,14 @@ export async function POST(request: Request) {
 
     // 2. Input Parsing and Validation
     const body = await request.json();
-    const { groupName, description, capacity } = body;
+    const {
+      groupName,
+      description,
+      capacity,
+      groupType,
+      schedules,
+      eventTime,
+    } = body;
 
     if (
       !groupName ||
@@ -45,9 +52,50 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    if (capacity && (typeof capacity !== "number" || capacity < 1)) {
+    if (
+      capacity === undefined ||
+      typeof capacity !== "number" ||
+      capacity < 1
+    ) {
       return NextResponse.json(
         { message: "Capacity must be a positive number" },
+        { status: 400 }
+      );
+    }
+    if (!groupType || !["Class", "Event"].includes(groupType)) {
+      return NextResponse.json(
+        { message: "A valid group type is required" },
+        { status: 400 }
+      );
+    }
+    if (groupType === "Class") {
+      // Check if schedules is a non-empty array
+      if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
+        return NextResponse.json(
+          { message: "At least one schedule is required for a class" },
+          { status: 400 }
+        );
+      }
+
+      // Validate every schedule object inside the array
+      for (const s of schedules) {
+        if (s.dayOfWeek === undefined || !s.startTime || !s.endTime) {
+          return NextResponse.json(
+            {
+              message:
+                "Each schedule entry must be complete (day, start time, end time)",
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+    if (
+      groupType === "Event" &&
+      (!eventTime || !eventTime.start || !eventTime.end)
+    ) {
+      return NextResponse.json(
+        { message: "A start and end time is required for an event" },
         { status: 400 }
       );
     }
@@ -74,8 +122,20 @@ export async function POST(request: Request) {
       );
     }
 
+    interface GroupData {
+      groupName: string;
+      capacity: number;
+      joinCode: string;
+      owner: string;
+      members: [];
+      groupType: "Class" | "Event";
+      description?: string;
+      schedules?: ISchedule[];
+      eventTime?: { start: Date; end: Date };
+    }
+
     // 4. Database Operation: Create and save the new group
-    const groupData = {
+    const groupData: GroupData = {
       groupName: groupName.trim(),
       capacity,
       joinCode,
@@ -85,7 +145,23 @@ export async function POST(request: Request) {
       ...(description &&
         typeof description === "string" &&
         description.trim().length > 0 && { description: description.trim() }),
+      groupType: groupType,
     };
+
+    if (groupType === "Class") {
+      groupData.schedules = schedules.map((s: ISchedule) => ({
+        dayOfWeek: s.dayOfWeek,
+        startTime: s.startTime,
+        endTime: s.endTime,
+      }));
+    } else {
+      groupData.eventTime = {
+        start: new Date(eventTime.start),
+        end: new Date(eventTime.end),
+      };
+    }
+
+    console.log("Creating group with data:", groupData);
 
     const newGroup = new Group(groupData);
     await newGroup.save();

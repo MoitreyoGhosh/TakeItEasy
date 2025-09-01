@@ -15,8 +15,21 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Trash2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { daysOfWeekValues } from "@/lib/utils/constants";
+import { generateTimeOptions, validateTimeOrder } from "@/lib/utils/time";
+import { ISchedule } from "@/lib/models/Group.model";
+
+const timeOptions = generateTimeOptions(40);
 
 export function CreateGroupDialog() {
   const router = useRouter();
@@ -26,7 +39,33 @@ export function CreateGroupDialog() {
   const [capacity, setCapacity] = useState(65);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [groupType, setGroupType] = useState<"Class" | "Event">("Class");
+  const [schedules, setSchedules] = useState<ISchedule[]>([
+    { dayOfWeek: 1, startTime: "10:00", endTime: "10:40" },
+  ]);
+  const [eventTime, setEventTime] = useState({ start: "", end: "" });
   const [error, setError] = useState("");
+
+  const handleAddSchedule = () => {
+    setSchedules([
+      ...schedules,
+      { dayOfWeek: 1, startTime: "10:00", endTime: "10:40" },
+    ]);
+  };
+
+  const handleRemoveSchedule = (index: number) => {
+    setSchedules(schedules.filter((_, i) => i !== index));
+  };
+
+  const handleScheduleChange = (
+    index: number,
+    field: keyof ISchedule,
+    value: string | number
+  ) => {
+    const newSchedules = [...schedules];
+    newSchedules[index] = { ...newSchedules[index], [field]: value };
+    setSchedules(newSchedules);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,12 +82,67 @@ export function CreateGroupDialog() {
       setIsSubmitting(false);
       return;
     }
+    if (groupType === "Class") {
+      if (schedules.length === 0) {
+        setError("At least one schedule is required for a class.");
+        setIsSubmitting(false);
+        return;
+      }
+      for (const s of schedules) {
+        if (!validateTimeOrder(s.startTime, s.endTime)) {
+          setError(
+            `Invalid time for ${
+              daysOfWeekValues[s.dayOfWeek]?.label
+            }. End time must be after start time.`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+    }
 
+    if (groupType === "Event") {
+      if (!eventTime.start) {
+        setError("Event start time is required.");
+        setIsSubmitting(false);
+        return;
+      }
+      if (!eventTime.end) {
+        setError("Event end time is required.");
+        setIsSubmitting(false);
+        return;
+      }
+      if (new Date(eventTime.end) <= new Date(eventTime.start)) {
+        setError("Event end time must be after the start time.");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    const payload: {
+      groupName: string;
+      description: string;
+      capacity: number;
+      groupType: "Class" | "Event";
+      schedules?: ISchedule[];
+      eventTime?: { start: string; end: string };
+    } = {
+      groupName,
+      description,
+      capacity,
+      groupType,
+    };
+    if (groupType === "Class") {
+      payload.schedules = schedules;
+    } else {
+      payload.eventTime = eventTime;
+    }
+    console.log("Payload for update:", payload);
     try {
       const response = await fetch("/api/groups/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupName, description, capacity }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -57,17 +151,18 @@ export function CreateGroupDialog() {
         throw new Error(data.message || "Something went wrong");
       }
 
-      // <-- 2. Use the simpler Sonner API
       toast.success(`Group "${data.group.groupName}" has been created.`);
 
       setOpen(false);
       setGroupName("");
       setDescription("");
-      setCapacity(50);
+      setCapacity(65);
+      setGroupType("Class");
+      setSchedules([{ dayOfWeek: 1, startTime: "10:00", endTime: "10:40" }]);
+      setEventTime({ start: "", end: "" });
       router.refresh();
     } catch (err: unknown) {
       setError((err as Error).message);
-      // <-- 3. Use toast.error for destructive feedback
       toast.error((err as Error).message || "Failed to create group.");
     } finally {
       setIsSubmitting(false);
@@ -81,60 +176,210 @@ export function CreateGroupDialog() {
           <PlusCircle className="mr-2 h-4 w-4" /> Create New Group
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-lg">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Create a New Group</DialogTitle>
             <DialogDescription>
-              Give your group a name and set the total capacity. You can share
-              the join code after creation.
+              Choose a group type and fill in the details.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="groupName" className="text-right">
-                Group Name
-              </Label>
+          <div className="grid gap-6 py-4 max-h-[65vh] overflow-y-auto pr-4 scrollbar-hide">
+            {/* --- GROUP TYPE SELECTION --- */}
+            <div className="space-y-2">
+              <Label>Group Type</Label>
+              <RadioGroup
+                value={groupType}
+                onValueChange={(value) =>
+                  setGroupType(value as "Class" | "Event")
+                }
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              >
+                <div>
+                  <RadioGroupItem
+                    value="Class"
+                    id="class"
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor="class"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                  >
+                    Class
+                    <span className="text-xs text-muted-foreground mt-1">
+                      Recurring schedule
+                    </span>
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem
+                    value="Event"
+                    id="event"
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor="event"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                  >
+                    Event
+                    <span className="text-xs text-muted-foreground mt-1">
+                      One-time occurrence
+                    </span>
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="groupName">Group Name</Label>
               <Input
                 id="groupName"
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                className="col-span-3"
                 placeholder="e.g., CS101 - Fall Semester"
                 disabled={isSubmitting}
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="description">Description (Optional)</Label>
               <Textarea
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g., Section B, Tuesdays 10 AM"
+                placeholder="e.g., Section B, Main Auditorium"
                 disabled={isSubmitting}
                 className="resize-none"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="capacity" className="text-right">
-                Capacity
-              </Label>
+
+            <div className="space-y-2">
+              <Label htmlFor="capacity">Capacity</Label>
               <Input
                 id="capacity"
                 type="number"
                 value={capacity}
                 onChange={(e) => setCapacity(Number(e.target.value))}
-                className="col-span-3"
                 min="1"
                 disabled={isSubmitting}
               />
             </div>
+
+            {/* --- CONDITIONAL SCHEDULE INPUTS --- */}
+            {groupType === "Class" ? (
+              <div className="space-y-4">
+                <Label>Weekly Schedule</Label>
+                {schedules.map((s, index) => (
+                  <div
+                    key={index}
+                    className="flex flex-row items-center gap-1 md:gap-2"
+                  >
+                    <Select
+                      value={String(s.dayOfWeek)}
+                      onValueChange={(value) =>
+                        handleScheduleChange(index, "dayOfWeek", Number(value))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Day" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {daysOfWeekValues.map((day) => (
+                          <SelectItem key={day.value} value={String(day.value)}>
+                            {day.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={s.startTime}
+                      onValueChange={(value) =>
+                        handleScheduleChange(index, "startTime", value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Start" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {timeOptions.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={s.endTime}
+                      onValueChange={(value) =>
+                        handleScheduleChange(index, "endTime", value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="End" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {timeOptions.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {schedules.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveSchedule(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddSchedule}
+                >
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Schedule
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="eventStart">Start Time</Label>
+                  <Input
+                    id="eventStart"
+                    type="datetime-local"
+                    value={eventTime.start}
+                    onChange={(e) =>
+                      setEventTime({ ...eventTime, start: e.target.value })
+                    }
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="eventEnd">End Time</Label>
+                  <Input
+                    id="eventEnd"
+                    type="datetime-local"
+                    value={eventTime.end}
+                    onChange={(e) =>
+                      setEventTime({ ...eventTime, end: e.target.value })
+                    }
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+            )}
           </div>
           {error && (
             <p className="text-sm text-red-500 text-center mb-4">{error}</p>
           )}
           <DialogFooter>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="w-[40%]">
               {isSubmitting ? "Creating..." : "Create Group"}
             </Button>
           </DialogFooter>
