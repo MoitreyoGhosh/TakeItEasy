@@ -89,7 +89,7 @@ const GroupSchema: Schema<IGroup> = new Schema(
     },
     groupType: {
       type: String,
-      enum: ["Class", "Event"],
+      enum: ["Class","Lab" ,"Event"],
       required: true,
     },
     schedules: {

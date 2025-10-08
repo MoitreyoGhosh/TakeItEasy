@@ -20,7 +20,7 @@ type GroupForCardActions = {
   groupName: string;
   description?: string;
   capacity: number;
-  groupType: "Class" | "Event";
+  groupType: "Class" | "Lab" | "Event";
   schedules?: ISchedule[];
   eventTime?: { start?: Date | string; end?: Date | string };
 };

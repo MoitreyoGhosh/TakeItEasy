@@ -23,7 +23,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { PlusCircle, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  CalendarClock,
+  FlaskConical,
+  PlusCircle,
+  Trash2,
+} from "lucide-react";
 import { daysOfWeekValues } from "@/lib/utils/constants";
 import {
   generateTimeOptions,
@@ -40,7 +46,7 @@ type GroupForEdit = {
   groupName: string;
   description?: string;
   capacity: number;
-  groupType: "Class" | "Event";
+  groupType: "Class" | "Lab" | "Event";
   schedules?: ISchedule[];
   eventTime?: { start?: Date | string; end?: Date | string };
 };
@@ -117,7 +123,7 @@ export function EditGroupDialog({
       setIsSubmitting(false);
       return;
     }
-    if (groupType === "Class") {
+    if (groupType === "Class" || groupType === "Lab") {
       if (schedules.length === 0) {
         setError("At least one schedule is required for a class.");
         setIsSubmitting(false);
@@ -158,7 +164,7 @@ export function EditGroupDialog({
       groupName: string;
       description: string;
       capacity: number;
-      groupType: "Class" | "Event";
+      groupType: "Class" | "Lab" | "Event";
       schedules?: ISchedule[];
       eventTime?: { start: string; end: string };
     } = {
@@ -167,7 +173,7 @@ export function EditGroupDialog({
       capacity,
       groupType,
     };
-    if (groupType === "Class") {
+    if (groupType === "Class" || groupType === "Lab") {
       payload.schedules = schedules;
     } else {
       payload.eventTime = eventTime;
@@ -216,9 +222,9 @@ export function EditGroupDialog({
               <RadioGroup
                 value={groupType}
                 onValueChange={(value) =>
-                  setGroupType(value as "Class" | "Event")
+                  setGroupType(value as "Class" | "Lab" | "Event")
                 }
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                className="grid grid-cols-3 md:gap-4 gap-2 text-center"
               >
                 <div>
                   <RadioGroupItem
@@ -228,9 +234,31 @@ export function EditGroupDialog({
                   />
                   <Label
                     htmlFor="class-edit"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                   >
-                    Class
+                    <div className="flex items-center gap-1">
+                      <BookOpen className="h-5 w-5" />
+                      <span>Class</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground mt-1">
+                      Recurring schedule
+                    </span>
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem
+                    value="Lab"
+                    id="lab-edit"
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor="lab-edit"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                  >
+                    <div className="flex items-center gap-1">
+                      <FlaskConical className="h-5 w-5" />
+                      <span>Lab</span>
+                    </div>
                     <span className="text-xs text-muted-foreground mt-1">
                       Recurring schedule
                     </span>
@@ -244,9 +272,12 @@ export function EditGroupDialog({
                   />
                   <Label
                     htmlFor="event-edit"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                   >
-                    Event
+                    <div className="flex items-center gap-1">
+                      <CalendarClock className="h-5 w-5" />
+                      Event
+                    </div>
                     <span className="text-xs text-muted-foreground mt-1">
                       One-time occurrence
                     </span>
@@ -289,13 +320,13 @@ export function EditGroupDialog({
             </div>
 
             {/* --- CONDITIONAL SCHEDULE INPUTS --- */}
-            {groupType === "Class" ? (
+            {groupType === "Class" || groupType === "Lab" ? (
               <div className="space-y-4">
                 <Label>Weekly Schedule</Label>
                 {schedules.map((s, index) => (
                   <div
                     key={index}
-                    className="flex flex-row items-center gap-1 md:gap-2"
+                    className="flex flex-row items-center gap-2 md:gap-4"
                   >
                     <Select
                       value={String(s.dayOfWeek)}
@@ -372,9 +403,9 @@ export function EditGroupDialog({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="eventStart-edit">Start Time</Label>
+                  <Label htmlFor="eventStart">Start Time</Label>
                   <Input
-                    id="eventStart-edit"
+                    id="eventStart"
                     type="datetime-local"
                     value={eventTime.start}
                     onChange={(e) =>
@@ -384,9 +415,9 @@ export function EditGroupDialog({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="eventEnd-edit">End Time</Label>
+                  <Label htmlFor="eventEnd">End Time</Label>
                   <Input
-                    id="eventEnd-edit"
+                    id="eventEnd"
                     type="datetime-local"
                     value={eventTime.end}
                     onChange={(e) =>

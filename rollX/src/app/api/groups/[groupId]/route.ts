@@ -142,17 +142,17 @@ export async function PATCH(
         { status: 400 }
       );
     }
-    if (!groupType || !["Class", "Event"].includes(groupType)) {
+    if (!groupType || !["Class", "Lab", "Event"].includes(groupType)) {
       return NextResponse.json(
         { message: "A valid group type is required" },
         { status: 400 }
       );
     }
-    if (groupType === "Class") {
+    if (groupType === "Class" || groupType === "Lab") {
       // Check if schedules is a non-empty array
       if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
         return NextResponse.json(
-          { message: "At least one schedule is required for a class" },
+          { message: "At least one schedule is required for a class or lab" },
           { status: 400 }
         );
       }
@@ -185,7 +185,7 @@ export async function PATCH(
       groupName: string;
       description?: string;
       capacity: number;
-      groupType: "Class" | "Event";
+      groupType: "Class" | "Lab" | "Event";
       schedules?: typeof schedules | null;
       eventTime?: typeof eventTime | null;
     }
@@ -198,9 +198,9 @@ export async function PATCH(
     };
 
     // Set the appropriate time fields based on group type
-    if (groupType === "Class") {
+    if (groupType === "Class" || groupType === "Lab") {
       updateData.schedules = schedules;
-      updateData.eventTime = null; // Remove eventTime for class groups
+      updateData.eventTime = null; // Remove eventTime for class and lab groups
     } else {
       // Event
       updateData.eventTime = {

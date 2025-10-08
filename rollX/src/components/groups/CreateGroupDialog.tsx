@@ -15,7 +15,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  CalendarClock,
+  FlaskConical,
+  PlusCircle,
+  Trash2,
+} from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -39,7 +45,9 @@ export function CreateGroupDialog() {
   const [capacity, setCapacity] = useState(65);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [groupType, setGroupType] = useState<"Class" | "Event">("Class");
+  const [groupType, setGroupType] = useState<"Class" | "Lab" | "Event">(
+    "Class"
+  );
   const [schedules, setSchedules] = useState<ISchedule[]>([
     { dayOfWeek: 1, startTime: "10:00", endTime: "10:40" },
   ]);
@@ -82,9 +90,9 @@ export function CreateGroupDialog() {
       setIsSubmitting(false);
       return;
     }
-    if (groupType === "Class") {
+    if (groupType === "Class" || groupType === "Lab") {
       if (schedules.length === 0) {
-        setError("At least one schedule is required for a class.");
+        setError("At least one schedule is required for a class or lab.");
         setIsSubmitting(false);
         return;
       }
@@ -123,7 +131,7 @@ export function CreateGroupDialog() {
       groupName: string;
       description: string;
       capacity: number;
-      groupType: "Class" | "Event";
+      groupType: "Class" | "Lab" | "Event";
       schedules?: ISchedule[];
       eventTime?: { start: string; end: string };
     } = {
@@ -132,7 +140,7 @@ export function CreateGroupDialog() {
       capacity,
       groupType,
     };
-    if (groupType === "Class") {
+    if (groupType === "Class" || groupType === "Lab") {
       payload.schedules = schedules;
     } else {
       payload.eventTime = eventTime;
@@ -191,9 +199,9 @@ export function CreateGroupDialog() {
               <RadioGroup
                 value={groupType}
                 onValueChange={(value) =>
-                  setGroupType(value as "Class" | "Event")
+                  setGroupType(value as "Class" | "Lab" | "Event")
                 }
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                className="grid grid-cols-3 md:gap-4 gap-2 text-center"
               >
                 <div>
                   <RadioGroupItem
@@ -203,9 +211,31 @@ export function CreateGroupDialog() {
                   />
                   <Label
                     htmlFor="class"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                   >
-                    Class
+                    <div className="flex items-center gap-1">
+                      <BookOpen className="h-5 w-5" />
+                      <span>Class</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground mt-1">
+                      Recurring schedule
+                    </span>
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem
+                    value="Lab"
+                    id="lab"
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor="lab"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                  >
+                    <div className="flex items-center gap-1">
+                      <FlaskConical className="h-5 w-5" />
+                      <span>Lab</span>
+                    </div>
                     <span className="text-xs text-muted-foreground mt-1">
                       Recurring schedule
                     </span>
@@ -219,9 +249,12 @@ export function CreateGroupDialog() {
                   />
                   <Label
                     htmlFor="event"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                   >
-                    Event
+                    <div className="flex items-center gap-1">
+                      <CalendarClock className="h-5 w-5" />
+                      <span>Event</span>
+                    </div>
                     <span className="text-xs text-muted-foreground mt-1">
                       One-time occurrence
                     </span>
@@ -266,13 +299,13 @@ export function CreateGroupDialog() {
             </div>
 
             {/* --- CONDITIONAL SCHEDULE INPUTS --- */}
-            {groupType === "Class" ? (
+            {groupType === "Class" || groupType === "Lab" ? (
               <div className="space-y-4">
                 <Label>Weekly Schedule</Label>
                 {schedules.map((s, index) => (
                   <div
                     key={index}
-                    className="flex flex-row items-center gap-1 md:gap-2"
+                    className="flex flex-row items-center gap-2 "
                   >
                     <Select
                       value={String(s.dayOfWeek)}

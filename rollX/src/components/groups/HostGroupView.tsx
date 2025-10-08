@@ -5,7 +5,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Calendar, Clock, Hash, Users } from "lucide-react";
+import {
+  BookOpen,
+  CalendarClock,
+  FlaskConical,
+  Hash,
+  Users,
+} from "lucide-react";
 import { MembersTable } from "./MembersTable";
 import { CopyButton } from "./CopyButton";
 import { GroupHeaderActions } from "./GroupHeaderActions";
@@ -30,13 +36,12 @@ type SerializedGroup = {
       fullName?: string;
     };
   }[];
-  groupType: "Class" | "Event";
+  groupType: "Class" | "Lab" | "Event";
   schedules?: { dayOfWeek: number; startTime: string; endTime: string }[];
   eventTime?: { start?: Date | string; end?: Date | string };
 };
 
 export function HostGroupView({ group }: { group: SerializedGroup }) {
-  // We need to destructure the group to pass a smaller object to GroupHeaderActions
   const { ...groupInfo } = group;
   return (
     <div className="space-y-8">
@@ -44,22 +49,40 @@ export function HostGroupView({ group }: { group: SerializedGroup }) {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {/* --- NEW, PROMINENT SCHEDULE/EVENT CARD --- */}
-          <Card className="md:col-span-2 lg:col-span-1">
+        <Card className="md:col-span-2 lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              {group.groupType === "Class" ? <Clock className="h-5 w-5" /> : <Calendar className="h-5 w-5" />}
-              {group.groupType === "Class" ? "Weekly Schedule" : "Event Time"}
+              {group.groupType === "Class" ? (
+                <BookOpen className="h-5 w-5" />
+              ) : group.groupType === "Lab" ? (
+                <FlaskConical className="h-5 w-5" />
+              ) : (
+                <CalendarClock className="h-5 w-5" />
+              )}
+              {group.groupType === "Class"
+                ? "Weekly Class Schedule"
+                : group.groupType == "Lab"
+                ? "Weekly Lab Schedule"
+                : "Event Time"}
             </CardTitle>
             <CardDescription>
-              {group.groupType === "Class" ? "Recurring class times." : "The date and time for this event."}
+              {group.groupType === "Class"
+                ? "Recurring class times."
+                : group.groupType === "Lab"
+                ? "Recurring lab times."
+                : "The date and time for this event."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {group.groupType === "Class" ? (
+            {group.groupType === "Class" || group.groupType === "Lab" ? (
               <div className="flex flex-wrap gap-2">
                 {group.schedules && group.schedules.length > 0 ? (
                   group.schedules.map((s, i) => (
-                    <Badge key={i} variant="secondary" className="text-sm font-medium">
+                    <Badge
+                      key={i}
+                      variant="secondary"
+                      className="text-sm font-medium"
+                    >
                       {formatFullSchedule(s, daysOfWeek)}
                     </Badge>
                   ))
@@ -68,7 +91,9 @@ export function HostGroupView({ group }: { group: SerializedGroup }) {
                 )}
               </div>
             ) : (
-              <div className="font-medium text-foreground">{formatFullEventTime(group.eventTime)}</div>
+              <div className="font-medium text-foreground">
+                {formatFullEventTime(group.eventTime)}
+              </div>
             )}
           </CardContent>
         </Card>

@@ -15,8 +15,9 @@ import {
   Calendar,
   CheckCircle2,
   BookOpen,
-  CalendarDays,
   Radio,
+  CalendarClock,
+  FlaskConical,
 } from "lucide-react";
 import { CopyButton } from "./CopyButton";
 import { HostGroupCardActions } from "./HostGroupCardActions";
@@ -37,7 +38,7 @@ type GroupCardProps = {
     members: string[];
     capacity: number;
     owner?: { profile?: { fullName: string } };
-    groupType: "Class" | "Event";
+    groupType: "Class" | "Lab" | "Event";
     schedules?: { dayOfWeek: number; startTime: string; endTime: string }[];
     eventTime?: { start?: Date | string; end?: Date | string };
   };
@@ -51,36 +52,36 @@ export function GroupCard({ group, userRole }: GroupCardProps) {
   const scheduleStatus = getScheduleStatus(group.schedules);
 
   const renderSchedule = () => {
-  const mainTimeStyle = "font-semibold text-foreground truncate";
+    const mainTimeStyle = "font-semibold text-foreground truncate";
 
-  switch (scheduleStatus.status) {
-    case 'Live':
-      return (
-        <div className="flex flex-col items-end">
-          <span className="flex items-center gap-2 font-semibold text-red-500 animate-pulse">
-            <Radio className="h-4 w-4" />
-            Live now
-          </span>
-        </div>
-      );
-    case 'Upcoming':
-      return (
-        <div className="flex flex-col items-end -space-y-1">
-          <span className={mainTimeStyle}>
-            {formatScheduleTime(scheduleStatus.schedule!, fullDayNames)}
-          </span>
-          {scheduleStatus.remainingSchedules > 0 && (
-            <span className="text-xs text-muted-foreground font-normal">
-              (+{scheduleStatus.remainingSchedules} more)
+    switch (scheduleStatus.status) {
+      case "Live":
+        return (
+          <div className="flex flex-col items-end">
+            <span className="flex items-center gap-2 font-semibold text-red-500 animate-pulse">
+              <Radio className="h-4 w-4" />
+              Live now
             </span>
-          )}
-        </div>
-      );
-    case 'None':
-    default:
-      return <span className={mainTimeStyle}>Not set</span>;
-  }
-};
+          </div>
+        );
+      case "Upcoming":
+        return (
+          <div className="flex flex-col items-end -space-y-1">
+            <span className={mainTimeStyle}>
+              {formatScheduleTime(scheduleStatus.schedule!, fullDayNames)}
+            </span>
+            {scheduleStatus.remainingSchedules > 0 && (
+              <span className="text-xs text-muted-foreground font-normal">
+                (+{scheduleStatus.remainingSchedules} more)
+              </span>
+            )}
+          </div>
+        );
+      case "None":
+      default:
+        return <span className={mainTimeStyle}>Not set</span>;
+    }
+  };
 
   return (
     <div className="relative h-full group">
@@ -115,13 +116,17 @@ export function GroupCard({ group, userRole }: GroupCardProps) {
                 className={`flex items-center gap-1 flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap shadow-sm ${
                   group.groupType === "Class"
                     ? "bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 dark:from-blue-800 dark:to-blue-900 dark:text-blue-100"
+                    : group.groupType === "Lab"
+                    ? "bg-gradient-to-r from-green-100 to-green-200 text-green-800 dark:from-green-800 dark:to-green-900 dark:text-green-100"
                     : "bg-gradient-to-r from-purple-100 to-pink-200 text-purple-800 dark:from-purple-800 dark:to-pink-900 dark:text-purple-100"
                 }`}
               >
                 {group.groupType === "Class" ? (
                   <BookOpen className="h-3.5 w-3.5" />
+                ) : group.groupType === "Lab" ? (
+                  <FlaskConical className="h-3.5 w-3.5" />
                 ) : (
-                  <CalendarDays className="h-3.5 w-3.5" />
+                  <CalendarClock className="h-3.5 w-3.5" />
                 )}
 
                 {group.groupType}
@@ -134,11 +139,17 @@ export function GroupCard({ group, userRole }: GroupCardProps) {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span className="flex items-center gap-2">
-                  {group.groupType === "Class" ? <Clock className="h-4 w-4" /> : <Calendar className="h-4 w-4" />}
-                  {group.groupType === "Class" ? "Schedule" : "Date & Time"}
+                  {group.groupType === "Class" ? (
+                    <BookOpen className="h-4 w-4 text-muted-foreground" />
+                  ) : group.groupType === "Lab" ? (
+                    <FlaskConical className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  {group.groupType === "Class" || group.groupType == "Lab" ? "Schedule" : "Date & Time"}
                 </span>
-                
-                {group.groupType === "Class" ? (
+
+                {group.groupType === "Class" || group.groupType == "Lab"? (
                   renderSchedule()
                 ) : (
                   <span className="font-semibold text-foreground truncate">

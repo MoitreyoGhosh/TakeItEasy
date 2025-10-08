@@ -62,13 +62,13 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    if (!groupType || !["Class", "Event"].includes(groupType)) {
+    if (!groupType || !["Class", "Lab", "Event"].includes(groupType)) {
       return NextResponse.json(
         { message: "A valid group type is required" },
         { status: 400 }
       );
     }
-    if (groupType === "Class") {
+    if (groupType === "Class" || groupType === "Lab") {
       // Check if schedules is a non-empty array
       if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
         return NextResponse.json(
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
       joinCode: string;
       owner: string;
       members: [];
-      groupType: "Class" | "Event";
+      groupType: "Class" | "Lab" | "Event";
       description?: string;
       schedules?: ISchedule[];
       eventTime?: { start: Date; end: Date };
@@ -148,7 +148,7 @@ export async function POST(request: Request) {
       groupType: groupType,
     };
 
-    if (groupType === "Class") {
+    if (groupType === "Class" || groupType === "Lab") {
       groupData.schedules = schedules.map((s: ISchedule) => ({
         dayOfWeek: s.dayOfWeek,
         startTime: s.startTime,

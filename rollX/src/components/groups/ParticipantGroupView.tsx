@@ -3,8 +3,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ArrowLeft,
-  Calendar,
-  Clock,
+  BookOpen,
+  CalendarClock,
+  FlaskConical,
   Hourglass,
   LogOut,
   Settings,
@@ -34,7 +35,7 @@ type SerializedGroup = {
   };
   members: unknown[];
   capacity: number;
-  groupType: "Class" | "Event";
+  groupType: "Class" | "Lab" | "Event";
   schedules?: { dayOfWeek: number; startTime: string; endTime: string }[];
   eventTime?: { start?: Date | string; end?: Date | string };
 };
@@ -94,11 +95,13 @@ export function ParticipantGroupView({ group }: { group: SerializedGroup }) {
 
           <span className="flex items-center gap-1.5 font-medium text-foreground">
             {group.groupType === "Class" ? (
-              <Clock className="h-4 w-4 text-muted-foreground" />
+              <BookOpen className="h-4 w-4 text-muted-foreground" />
+            ) : group.groupType === "Lab" ? (
+              <FlaskConical className="h-4 w-4 text-muted-foreground" />
             ) : (
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <CalendarClock className="h-4 w-4 text-muted-foreground" />
             )}
-            {group.groupType === "Class"
+            {group.groupType === "Class" || group.groupType === "Lab"
               ? group.schedules && group.schedules.length > 0
                 ? group.schedules
                     .map((s) => formatFullSchedule(s, fullDayNames))
