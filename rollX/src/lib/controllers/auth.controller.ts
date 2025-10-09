@@ -4,6 +4,7 @@ import StudentModel from "@/lib/models/Student.model";
 import HostModel from "@/lib/models/Host.model";
 import { signUpSchema } from "@/lib/validations/auth";
 import { connectToDatabase } from "../db";
+import bcrypt from "bcryptjs";
 
 // This function handles the entire registration process
 export async function registerUser(userData: unknown) {
@@ -48,6 +49,9 @@ export async function registerUser(userData: unknown) {
       }
     }
 
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     const profileModel: "Student" | "Host" = role;
     let newProfile;
 
@@ -72,7 +76,7 @@ export async function registerUser(userData: unknown) {
     //    The pre('save') hook in the User model will handle the hashing.
     const newUser = new UserModel({
       email,
-      password: password,
+      password: hashedPassword,
       role,
       provider: "credentials",
       profileComplete: true,

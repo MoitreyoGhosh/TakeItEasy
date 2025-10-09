@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import UserModel from "@/lib/models/User.model";
 import { connectToDatabase } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
     await connectToDatabase();
-    const { token, password } = await request.json();
+    const { token, password: newPassword } = await request.json();
 
-    if (!token || !password || password.length < 8) {
+    if (!token || !newPassword || newPassword.length < 8) {
       return NextResponse.json(
         {
           success: false,
@@ -30,11 +31,23 @@ export async function POST(request: NextRequest) {
       throw new Error("Password reset token is invalid or has expired.");
     }
 
-    user.password = password;
+    if (user.password) {
+      const isSamePassword = await bcrypt.compare(newPassword, user.password);
+      if (isSamePassword) {
+        throw new Error(
+          "Your new password cannot be the same as your old password."
+        );
+      }
+    }
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    // Assign the hashed password. Let the model handle the hashing.
+    // This makes the controller simple and relies on our single source of truth.
+    user.password = hashedPassword;
 
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
-    await user.save(); // The pre-save hook will now fire and hash the password correctly.
+    await user.save(); // Save the updated user document
 
     return NextResponse.json({
       success: true,
