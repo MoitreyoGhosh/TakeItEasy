@@ -1,52 +1,143 @@
-import express from 'express';
-import http from 'http';
-import { Server } from 'socket.io';
-import cors from 'cors';
-import dotenv from 'dotenv';
+import express from "express";
+import http from "http";
+import { Server } from "socket.io";
+import cors from "cors";
+import dotenv from "dotenv";
+import { onConnection } from "./events/onConnection.js";
+import { authMiddleware, internalApiAuthMiddleware } from "./utils/auth.js";
+import { startSession } from "./sessionManager.js";
 
-// Load environment variables from the root .env file
-dotenv.config({ path: '../.env' });
+dotenv.config();
 
 const app = express();
-
-// Use CORS to allow our Next.js frontend to connect
-app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:3000",
-  credentials: true
-}));
-
 const server = http.createServer(app);
+
+app.use(cors());
+app.use(express.json());
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: process.env.ROLLX_CLIENT_URL,
     methods: ["GET", "POST"],
-    credentials: true
-  }
+  },
 });
 
-// A simple health check endpoint to see if the server is running
-app.get('/', (req, res) => {
-  res.send('WebSocket Server is running!');
+app.get("/health", (req, res) => {
+  res
+    .status(200)
+    .json({ status: "ok", message: "WebSocket server is healthy." });
 });
 
-// This is where all our real-time magic will happen
-io.on('connection', (socket) => {
-  console.log('🔌 A user connected:', socket.id);
+// Internal endpoint for RollX to initiate a new attendance session
+app.post(
+  "/api/internal/start-session",
+  internalApiAuthMiddleware, // Apply security middleware first
+  (req, res) => {
+    try {
+      const { sessionId, groupId, duration } = req.body;
 
-  // Handle disconnection
-  socket.on('disconnect', () => {
-    console.log('🔥 A user disconnected:', socket.id);
-  });
+      // Validate the incoming data
+      if (!sessionId || !groupId || !duration) {
+        return res
+          .status(400)
+          .json({ message: "Missing required session data." });
+      }
 
-  // Example event listener
-  socket.on('ping', () => {
-    console.log(`Received ping from ${socket.id}. Sending pong.`);
-    socket.emit('pong');
-  });
-});
+      // Delegate the logic to our session manager
+      startSession(sessionId, groupId, duration);
 
-const PORT = process.env.WS_PORT || 3001;
+      res.status(200).json({ message: "Session successfully initiated." });
+    } catch (error) {
+      console.error("[API Error] /start-session failed:", error);
+      res.status(500).json({ message: "Internal server error." });
+    }
+  },
+);
+
+// Internal endpoint for rollx to confirm manual attendance requests
+app.post(
+  "/api/internal/manual-confirm",
+  internalApiAuthMiddleware,
+  (req, res) => {
+    try {
+      const { sessionId, studentId, groupId } = req.body;
+      const roomName = `group-${groupId}`;
+
+      // Notify host to update roster
+      io.to(roomName).emit("participant_confirmed", { _id: studentId });
+      // Notify student their request was approved
+      io.to(roomName).emit("manual_attendance_approved", {
+        studentId,
+        sessionId,
+      });
+
+      res
+        .status(200)
+        .json({ message: "Manual attendance confirmed and broadcasted." });
+    } catch (error) {
+      console.error("[API Error] /manual-confirm failed:", error);
+      res.status(500).json({ message: "Internal server error." });
+    }
+  },
+);
+
+// Internal endpoint for rollx to reject manual attendance requests
+app.post(
+  "/api/internal/manual-reject",
+  internalApiAuthMiddleware,
+  (req, res) => {
+    try {
+      const { sessionId, studentId, groupId } = req.body;
+
+      const roomName = `group-${groupId}`;
+      io.to(roomName).emit("manual_attendance_rejected", {
+        studentId,
+        sessionId,
+      });
+
+      res
+        .status(200)
+        .json({ message: "Manual attendance rejected and broadcasted." });
+    } catch (error) {
+      console.error("[API Error] /manual-reject failed:", error);
+      res.status(500).json({ message: "Internal server error." });
+    }
+  },
+);
+
+// Internal endpoint for rollx to forward broadcast manual attendance requests to host
+app.post(
+  "/api/internal/new-manual-request",
+  internalApiAuthMiddleware,
+  (req, res) => {
+    try {
+      const { sessionId, studentId, groupId, reason } = req.body;
+
+      const roomName = `group-${groupId}`;
+
+      // Relay the request event to the Host
+      io.to(roomName).emit("manual_attendance_request", {
+        studentId,
+        sessionId,
+        reason,
+      });
+
+      res.status(200).json({ message: "Manual request broadcasted to host." });
+    } catch (error) {
+      console.error("[API Error] /new-manual-request failed:", error);
+      res.status(500).json({ message: "Internal server error." });
+    }
+  },
+);
+
+io.use(authMiddleware);
+io.on("connection", onConnection);
+
+const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
-  console.log(`🚀 WebSocket server is listening on port ${PORT}`);
+  console.log(
+    `[Server] WebSocket server is running on http://localhost:${PORT}`,
+  );
 });
+
+export { io };
