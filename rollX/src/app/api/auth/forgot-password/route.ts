@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     if (!email) {
       return NextResponse.json(
         { success: false, message: "Email is required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -54,12 +54,12 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error) {
       return NextResponse.json(
         { success: false, message: error.message },
-        { status: 500 }
+        { status: 500 },
       );
     }
     return NextResponse.json(
       { success: false, message: "An internal server error occurred." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
