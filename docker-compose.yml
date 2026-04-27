@@ -20,10 +20,8 @@ services:
     # container if it ever stops (e.g., due to a crash or a server reboot).
     restart: always
     # 'env_file' tells Docker Compose to load environment variables from a file.
-    # Both services will load variables from the same root .env file,
-    # which is great for sharing secrets like JWT_SECRET.
     env_file:
-      - ./.env
+      - ./rollX/.env
     # 'depends_on' creates a dependency between services.
     # This line ensures that Docker will start the 'ws-server' container
     # *before* it starts the 'rollx' container. This is useful because our
@@ -32,7 +30,7 @@ services:
       - ws-server
     # 'networks' connects this service to a specific virtual network.
     # Containers on the same network can discover and communicate with each other
-    # using their service names as hostnames (e.g., `ws-server:3001`).
+    # using their service names as hostnames (e.g., `ws-server:8080`).
     networks:
       - app-network
 
@@ -42,10 +40,10 @@ services:
     build:
       context: ./ws-server # Looks for the Dockerfile in the './ws-server' directory.
     ports:
-      - "3001:3001" # Maps `localhost:3001` to port 3001 inside the container.
+      - "8080:8080" # Maps `localhost:8080` to port 8080 inside the container.
     restart: always
     env_file:
-      - ./.env # This service also loads variables from the same .env file.
+      - ./ws-server/.env # This service also loads variables from its own .env file.
     networks:
       - app-network # Also connected to the same network as the frontend.
 
