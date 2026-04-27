@@ -29,7 +29,7 @@ export const getScheduleStatus = (schedules?: ISchedule[]): ScheduleStatus => {
   const now = new Date();
   const currentDay = now.getDay(); // Sunday = 0, Monday = 1, etc.
   const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-    now.getMinutes()
+    now.getMinutes(),
   ).padStart(2, "0")}`;
 
   // Priority 1: Check if any session is currently live.
@@ -90,7 +90,7 @@ export const generateTimeOptions = (intervalInMinutes: number): string[] => {
     const hours = Math.floor(i / 60);
     const minutes = i % 60;
     const formattedTime = `${String(hours).padStart(2, "0")}:${String(
-      minutes
+      minutes,
     ).padStart(2, "0")}`;
     options.push(formattedTime);
   }
@@ -103,7 +103,7 @@ export const generateTimeOptions = (intervalInMinutes: number): string[] => {
  */
 export const validateTimeOrder = (
   startTime: string,
-  endTime: string
+  endTime: string,
 ): boolean => {
   return endTime > startTime;
 };
@@ -130,10 +130,10 @@ export const toDateTimeLocal = (date: Date | string | undefined): string => {
  */
 export const formatScheduleTime = (
   schedule: { dayOfWeek: number; startTime: string },
-  daysOfWeek: string[]
+  daysOfWeek: string[],
 ): string => {
   return `${daysOfWeek[schedule.dayOfWeek]} ${format24HourTo12Hour(
-    schedule.startTime
+    schedule.startTime,
   )}`;
 };
 
@@ -160,7 +160,7 @@ export const formatEventDisplayTime = (eventTime?: {
  */
 export const formatFullSchedule = (
   schedule: { dayOfWeek: number; startTime: string; endTime: string },
-  daysOfWeek: string[]
+  daysOfWeek: string[],
 ): string => {
   const startTime12 = format24HourTo12Hour(schedule.startTime);
   const endTime12 = format24HourTo12Hour(schedule.endTime);
@@ -204,6 +204,16 @@ export const formatFullEventTime = (eventTime?: {
   }
   return `${start.toLocaleString(undefined, options)} to ${end.toLocaleString(
     undefined,
-    options
+    options,
   )}`;
+};
+
+// Format Time Left For Host Live View
+export const formatTimeLeft = (seconds: number) => {
+  const cleanSeconds = Math.floor(seconds);
+  const minutes = Math.floor(cleanSeconds / 60);
+  const remainingSeconds = cleanSeconds % 60;
+  return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
+    .toString()
+    .padStart(2, "0")}`;
 };
