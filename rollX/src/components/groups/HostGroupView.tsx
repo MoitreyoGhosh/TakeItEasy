@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Card,
   CardContent,
@@ -18,8 +20,21 @@ import { GroupHeaderActions } from "./GroupHeaderActions";
 import { daysOfWeek } from "@/lib/utils/constants";
 import { Badge } from "@/components/ui/badge";
 import { formatFullSchedule, formatFullEventTime } from "@/lib/utils/time";
+import { useRouter } from "next/navigation";
+import { ManualAttendancePanel } from "@/components/sessions/ManualAttendancePanel";
 
-// Define a type for the serialized group data
+type ActiveSession = {
+  id: string;
+  shortCode: string;
+  expiresAt: string;
+};
+
+type ManualRequest = {
+  studentId: string;
+  sessionId: string;
+  reason?: string;
+};
+
 type SerializedGroup = {
   _id: string;
   groupName: string;
@@ -42,13 +57,16 @@ type SerializedGroup = {
 };
 
 export function HostGroupView({ group }: { group: SerializedGroup }) {
-  const { ...groupInfo } = group;
+  const router = useRouter();
+
+  const handleStartSession = (session: ActiveSession) => {
+    router.push(`/group/${group._id}/${session.id}`);
+  };
+
   return (
     <div className="space-y-8">
-      <GroupHeaderActions group={groupInfo} />
-
+      <GroupHeaderActions group={group} onSessionStart={handleStartSession} />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {/* --- NEW, PROMINENT SCHEDULE/EVENT CARD --- */}
         <Card className="md:col-span-2 lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -61,18 +79,20 @@ export function HostGroupView({ group }: { group: SerializedGroup }) {
               )}
               {group.groupType === "Class"
                 ? "Weekly Class Schedule"
-                : group.groupType == "Lab"
-                ? "Weekly Lab Schedule"
-                : "Event Time"}
+                : group.groupType === "Lab"
+                  ? "Weekly Lab Schedule"
+                  : "Event Time"}
             </CardTitle>
+
             <CardDescription>
               {group.groupType === "Class"
                 ? "Recurring class times."
                 : group.groupType === "Lab"
-                ? "Recurring lab times."
-                : "The date and time for this event."}
+                  ? "Recurring lab times."
+                  : "The date and time for this event."}
             </CardDescription>
           </CardHeader>
+
           <CardContent>
             {group.groupType === "Class" || group.groupType === "Lab" ? (
               <div className="flex flex-wrap gap-2">
@@ -127,6 +147,8 @@ export function HostGroupView({ group }: { group: SerializedGroup }) {
           </CardContent>
         </Card>
       </div>
+
+      <ManualAttendancePanel groupId={group._id} members={group.members} />
 
       {/* Members Table Section */}
       <div>

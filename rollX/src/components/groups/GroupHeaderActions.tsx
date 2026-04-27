@@ -37,8 +37,16 @@ type GroupForHeader = {
   eventTime?: { start?: Date | string; end?: Date | string };
 };
 
+// Define the shape of the session data that is returned from the API
+type ApiSessionData = {
+  id: string;
+  shortCode: string;
+  expiresAt: string;
+};
+
 type GroupHeaderActionsProps = {
   group: GroupForHeader;
+  onSessionStart: (sessionData: ApiSessionData) => void;
 };
 
 // Inline Description Form Component
@@ -120,10 +128,41 @@ function InlineDescriptionForm({
   );
 }
 
-export function GroupHeaderActions({ group }: GroupHeaderActionsProps) {
+export function GroupHeaderActions({
+  group,
+  onSessionStart,
+}: GroupHeaderActionsProps) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [isStartingSession, setIsStartingSession] = useState(false);
+
+  const handleStartSession = async () => {
+    setIsStartingSession(true);
+    try {
+      const response = await fetch(`/api/groups/${group._id}/sessions`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to start the session.");
+      }
+      toast.success(`Live session for "${group.groupName}" has started!`);
+
+      onSessionStart({
+        id: data.session.id,
+        shortCode: data.session.shortCode,
+        expiresAt: data.session.expiresAt,
+      });
+    } catch (error: unknown) {
+      console.error("Error starting session:", error);
+      toast.error(
+        error instanceof Error ? error.message : "An unknown error occurred.",
+      );
+      // Only set loading to false on error, so the view can switch on success.
+      setIsStartingSession(false);
+    }
+  };
 
   return (
     <>
@@ -198,9 +237,13 @@ export function GroupHeaderActions({ group }: GroupHeaderActionsProps) {
           <Button
             size="lg"
             className="w-full md:w-auto bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg hover:shadow-xl transition-shadow"
+            onClick={handleStartSession}
+            disabled={isStartingSession}
           >
             <PlayCircle className="mr-2 h-5 w-5" />
-            Start Attendance Session
+            {isStartingSession
+              ? "Starting Session..."
+              : "Start Attendance Session"}
           </Button>
         </div>
       </div>
