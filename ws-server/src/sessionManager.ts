@@ -1,12 +1,19 @@
 import { io } from "./server.js";
 
+interface NotificationMapItem {
+  studentId: string;
+  notificationId: string;
+}
+
 interface SessionData {
   isActive: boolean;
   groupId: string;
   timerId: NodeJS.Timeout;
   connectedParticipants: Set<string>;
+  studentIds: string[];
+  notificationMap: NotificationMapItem[];
+  groupName?: string | undefined;
 }
-
 // In-Memory Store for Active Sessions
 const activeSessions = new Map<string, SessionData>();
 
@@ -17,11 +24,17 @@ const activeSessions = new Map<string, SessionData>();
  * @param sessionId - The unique ID for this session (MongoDB ObjectId)
  * @param groupId - The group ID this session belongs to
  * @param duration - Session duration in seconds
+ * @param studentIds - List of student IDs to notify about the session start
+ * @param notificationMap - Mapping of student IDs to their corresponding notification IDs for this session
+ * @param groupName - Optional name of the group for better notification context
  */
 export const startSession = (
   sessionId: string,
   groupId: string,
   duration: number,
+  studentIds: string[],
+  notificationMap: NotificationMapItem[],
+  groupName?: string,
 ) => {
   // If a session already exists, clear it to prevent overlaps.
   if (activeSessions.has(sessionId)) {
@@ -43,13 +56,30 @@ export const startSession = (
     timerId,
     connectedParticipants: new Set(),
     isActive: true,
+    studentIds,
+    notificationMap,
+    groupName,
   });
 
-  // Broadcast the "session_started" event
+  // Notify students globally through personal rooms
+  notificationMap.forEach(({ studentId, notificationId }) => {
+    io.to(`user-${studentId}`).emit("session_notification", {
+      notificationId,
+      sessionId,
+      duration,
+      groupId,
+      groupName,
+    });
+  });
+
+  // Also notify active classroom participants
   const roomName = `group-${groupId}`;
+
   io.to(roomName).emit("session_started", {
     sessionId,
     duration,
+    groupId,
+    groupName,
   });
 
   console.log(`[Broadcast] 📢 'session_started' emitted to room: ${roomName}`);

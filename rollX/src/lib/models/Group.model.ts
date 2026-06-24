@@ -41,14 +41,14 @@ export interface IGroup extends Document {
   lastSessionStartedAt?: Date;
 }
 
-// Schedule Schema 
+// Schedule Schema
 const ScheduleSchema: Schema<ISchedule> = new Schema(
   {
     dayOfWeek: { type: Number, required: true, min: 0, max: 6 },
     startTime: { type: String, required: true },
     endTime: { type: String, required: true },
   },
-  { _id: false }
+  { _id: false },
 ); // _id: false is important for sub-documents in an array
 
 const GroupSchema: Schema<IGroup> = new Schema(
@@ -89,7 +89,7 @@ const GroupSchema: Schema<IGroup> = new Schema(
     },
     groupType: {
       type: String,
-      enum: ["Class","Lab" ,"Event"],
+      enum: ["Class", "Lab", "Event"],
       required: true,
     },
     schedules: {
@@ -106,7 +106,7 @@ const GroupSchema: Schema<IGroup> = new Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Use existing model if it exists, otherwise create a new one

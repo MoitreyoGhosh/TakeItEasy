@@ -556,7 +556,8 @@ export function HostLiveView({
 
         <ManualAttendancePanel
           groupId={group.id}
-          rosterMap={rosterMap}
+          sessionId={session.id}
+          members={rosterMembers}
           onManualApprove={handleManualApproval}
         />
 

@@ -8,21 +8,25 @@ import { connectToDatabase } from "@/lib/db";
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
+
     if (!session?.user) {
       return NextResponse.json(
         { message: "Not authenticated" },
-        { status: 401 }
+        { status: 401 },
       );
     }
+
     if (session.user.role !== "Student") {
       return NextResponse.json(
         { message: "Forbidden: Only Students can join groups" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
     await connectToDatabase();
+
     const { joinCode } = await request.json();
+
     if (
       !joinCode ||
       typeof joinCode !== "string" ||
@@ -30,55 +34,104 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         { message: "A valid join code is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const sanitizedCode = joinCode.trim().toUpperCase();
+
     const studentIdString = session.user.id;
+
+    if (!mongoose.Types.ObjectId.isValid(studentIdString)) {
+      return NextResponse.json(
+        { message: "Invalid student ID" },
+        { status: 400 },
+      );
+    }
+
+    const studentObjectId = new mongoose.Types.ObjectId(studentIdString);
+
+    // Fetch group first for validation and messaging
     const group = await Group.findOne({ joinCode: sanitizedCode });
 
     if (!group) {
       return NextResponse.json(
         { message: "Group not found." },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
+    // Check if already member
     const isAlreadyMember = group.members.some(
-      (memberId) => memberId.toString() === studentIdString
+      (memberId) => memberId.toString() === studentIdString,
     );
 
     if (isAlreadyMember) {
       return NextResponse.json(
-        { message: `You are already a member of "${group.groupName}".` },
-        { status: 200 }
+        {
+          message: `You are already a member of "${group.groupName}".`,
+        },
+        { status: 200 },
       );
     }
 
+    // Capacity validation
     if (group.members.length >= group.capacity) {
       return NextResponse.json(
         { message: "This group is full." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const studentObjectId = new mongoose.Types.ObjectId(studentIdString);
-    group.members.push(studentObjectId);
-    const savedGroup = await group.save();
+    /**
+     * ATOMIC UPDATE
+     *
+     * Prevents race conditions where multiple simultaneous requests
+     * can insert duplicate members before save completes.
+     */
+    const savedGroup = await Group.findOneAndUpdate(
+      {
+        _id: group._id,
+        members: { $ne: studentObjectId },
+      },
+      {
+        $addToSet: {
+          members: studentObjectId,
+        },
+      },
+      {
+        new: true,
+      },
+    );
+
+    /**
+     * If null:
+     * Another concurrent request already inserted the member.
+     */
+    if (!savedGroup) {
+      return NextResponse.json(
+        {
+          message: `You are already a member of "${group.groupName}".`,
+        },
+        {
+          status: 200,
+        },
+      );
+    }
 
     return NextResponse.json(
       {
         message: `Successfully joined "${savedGroup.groupName}"!`,
         group: savedGroup,
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
     console.error("Error joining group:", error);
+
     return NextResponse.json(
       { message: "An internal server error occurred." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

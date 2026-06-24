@@ -4,12 +4,10 @@ import type { JwtPayload } from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
 
 /**
- * Interface defining the structure of the JWT payload.
- * This ensures type safety for the decoded data.
+ * Updated JWT payload (GLOBAL)
  */
 interface DecodedTicket extends JwtPayload {
   userId: string;
-  groupId: string;
   role: "Host" | "Student";
 }
 
@@ -19,7 +17,7 @@ interface DecodedTicket extends JwtPayload {
  *
  * - Expects client to send the token as:
  *   `io({ auth: { token: "<JWT>" } })`
- * - Attaches `userId`, `groupId`, and `role` to the `socket.data` object on success.
+ * - Attaches `userId` and `role` to the `socket.data` object on success.
  */
 export const authMiddleware = (socket: Socket, next: (err?: Error) => void) => {
   const token = socket.handshake.auth.token as string | undefined;
@@ -42,18 +40,17 @@ export const authMiddleware = (socket: Socket, next: (err?: Error) => void) => {
   try {
     const decoded = jwt.verify(token, jwtSecret) as DecodedTicket;
 
-    if (!decoded.userId || !decoded.groupId || !decoded.role) {
+    if (!decoded.userId || !decoded.role) {
       console.warn("[Auth] ❌ Token payload missing required fields.");
       return next(new Error("Authentication error: Malformed token payload."));
     }
 
-    // Attach validated user data to the socket
+    // Attach ONLY user identity (GLOBAL SOCKET)
     socket.data.userId = decoded.userId;
-    socket.data.groupId = decoded.groupId;
     socket.data.role = decoded.role;
 
     console.log(
-      `[Auth] ✅ Authenticated socket connection: user=${decoded.userId}, group=${decoded.groupId}, role=${decoded.role}`,
+      `[Auth] ✅ Authenticated socket connection: user=${decoded.userId}, role=${decoded.role}`,
     );
 
     return next();

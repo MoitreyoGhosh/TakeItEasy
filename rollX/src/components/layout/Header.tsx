@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { NotificationBell } from "@/components/ui/NotificationBell";
 import UserNav from "./UserNav";
 
 export default function Header() {
@@ -12,8 +13,9 @@ export default function Header() {
           </Link>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2">
-          <UserNav />
+          <NotificationBell />
           <ThemeToggle />
+          <UserNav />
         </div>
       </div>
     </header>

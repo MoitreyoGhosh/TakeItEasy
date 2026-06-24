@@ -6,6 +6,7 @@ import AttendanceSession from "@/lib/models/AttendanceSession.model";
 import mongoose from "mongoose";
 import { customAlphabet } from "nanoid";
 import { connectToDatabase } from "@/lib/db";
+import { createNotification } from "@/lib/services/notification.service";
 
 // Configuration Constants
 const generateShortCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
@@ -13,9 +14,10 @@ const SESSION_DURATION_SECONDS = 45; // 45 seconds
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ groupId: string }> }
+  context: { params: Promise<{ groupId: string }> },
 ) {
   const { groupId } = await context.params;
+
   try {
     // 1. Authenticate the user (This is our first `await`)
     const session = await getServerSession(authOptions);
@@ -28,18 +30,33 @@ export async function POST(
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
       return NextResponse.json(
         { message: "Invalid Group ID" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const hostId = new mongoose.Types.ObjectId(session.user.id);
 
     // 3. Ensure the host owns this group
-    const group = await Group.findOne({ _id: groupId, owner: hostId });
+    const group = await Group.findOne({
+      _id: groupId,
+      owner: hostId,
+    })
+      .populate({
+        path: "members",
+        select: "_id",
+      })
+      .lean<{
+        _id: mongoose.Types.ObjectId;
+        groupName?: string;
+        members?: {
+          _id: mongoose.Types.ObjectId;
+        }[];
+      } | null>();
+
     if (!group) {
       return NextResponse.json(
         { message: "Group not found or you are not the owner" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -51,7 +68,7 @@ export async function POST(
     if (existingActiveSession) {
       return NextResponse.json(
         { message: "An active session for this group already exists." },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -66,6 +83,32 @@ export async function POST(
       status: "active",
     });
     await newSession.save();
+
+    // Create persistent session_started notifications
+    const memberIds =
+      group.members?.map((member) => member._id.toString()) || [];
+
+    const createdNotifications = await Promise.all(
+      memberIds.map((memberId) =>
+        createNotification({
+          recipient: memberId,
+          type: "session_started",
+          priority: "medium",
+          data: {
+            sessionId: newSession._id!.toString(),
+            groupId,
+            groupName: group.groupName || "Classroom",
+          },
+        }),
+      ),
+    );
+
+    
+
+    const notificationMap = createdNotifications.map((notification, index) => ({
+      studentId: memberIds[index],
+      notificationId: notification._id.toString(),
+    }));
 
     // 6. Notify the WebSocket server (internal secure call)
     const wsHost =
@@ -86,38 +129,46 @@ export async function POST(
         sessionId: newSession._id!.toString(),
         groupId,
         duration: SESSION_DURATION_SECONDS,
+        groupName: group.groupName || "Classroom",
+        studentIds: group.members?.map((member) => member._id.toString()) || [],
+        notificationMap,
       }),
     });
 
     if (!internalApiResponse.ok) {
       console.error(
         "Failed to notify ws-server:",
-        await internalApiResponse.text()
+        await internalApiResponse.text(),
       );
       await AttendanceSession.findByIdAndDelete(newSession._id);
       return NextResponse.json(
         { message: "Failed to start real-time session." },
-        { status: 500 }
+        { status: 500 },
       );
     }
+
+    console.log("SESSION ROUTE HIT", {
+      time: Date.now(),
+      groupId,
+    });
 
     // 7. Success response
     return NextResponse.json(
       {
         message: "Session started successfully!",
         session: {
-          id: newSession._id,
+          id: newSession._id!.toString(),
           shortCode: newSession.shortCode,
           expiresAt: newSession.expiresAt,
         },
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("Error starting session:", error);
     return NextResponse.json(
       { message: "An internal server error occurred." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

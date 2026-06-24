@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
-//import type { SerializableMember } from "@/types/types";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { useSession } from "next-auth/react";
+import { useGlobalSocket } from "@/providers/SocketProvider";
+import type { SerializableMember } from "@/types/types";
 
 interface ActiveSession {
   sessionId: string;
@@ -33,214 +31,147 @@ interface ServerToClientEvents {
 }
 
 interface ClientToServerEvents {
-  get_host_status: (callback: (isOnline: boolean) => void) => void;
+  get_host_status: (
+    groupId: string,
+    callback: (isOnline: boolean) => void,
+  ) => void;
   confirm_presence: (
     sessionId: string,
     callback: (success: boolean) => void,
   ) => void;
   end_session: (data: { sessionId: string }) => void;
+  request_manual_attendance: (
+    data: { sessionId: string; reason: string },
+    callback: (success: boolean, message?: string) => void,
+  ) => void;
+  join_group: (groupId: string) => void;
+  leave_group: (groupId: string) => void;
 }
 
-interface UseSocketProps {
-  groupId?: string;
-}
-
-export const useSocket = ({ groupId }: UseSocketProps) => {
-  const socketRef = useRef<Socket<
-    ServerToClientEvents,
-    ClientToServerEvents
-  > | null>(null);
-
-  const [socket, setSocket] = useState<Socket<
-    ServerToClientEvents,
-    ClientToServerEvents
-  > | null>(null);
+export const useSocket = ({ groupId }: { groupId?: string }) => {
+  const { socket } = useGlobalSocket();
+  const router = useRouter();
 
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(
     null,
   );
-
   const [isHostOnline, setIsHostOnline] = useState(false);
-  const router = useRouter();
-  const { data: session } = useSession();
 
   useEffect(() => {
-    if (!groupId) return;
+    if (!socket || !groupId) return;
 
     let isMounted = true;
-    let socketInstance: Socket<
-      ServerToClientEvents,
-      ClientToServerEvents
-    > | null = null;
 
-    const connectSocket = async () => {
-      try {
-        if (socketRef.current) {
-          socketRef.current.disconnect();
-          socketRef.current = null;
-        }
+    // 1. INSTANT STATE SYNC (Fixes the perpetual loading bug)
+    setIsConnected(socket.connected);
 
-        const response = await fetch("/api/ws/ticket", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ groupId }),
-        });
+    // 2. JOIN THE ROOM
+    socket.emit("join_group", groupId);
 
-        if (response.status === 401 || response.status === 403)
-          throw new Error("Unauthorized. Please log in again.");
+    // 3. FETCH INITIAL STATUS
+    const checkHostStatus = () => {
+      socket.emit("get_host_status", groupId, (isOnline: boolean) => {
+        if (isMounted) setIsHostOnline(isOnline);
+      });
+    };
 
-        if (!response.ok) throw new Error("Failed to fetch auth ticket.");
+    if (socket.connected) checkHostStatus();
 
-        const { ticket } = await response.json();
+    // 4. ATTACH LISTENERS
+    const onConnect = () => {
+      if (!isMounted) return;
+      setIsConnected(true);
+      setError(null);
+      socket.emit("join_group", groupId); // Re-join if reconnected
+      checkHostStatus();
+    };
 
-        if (!ticket) throw new Error("Missing auth ticket from server.");
+    const onDisconnect = (reason: string) => {
+      if (!isMounted) return;
+      setIsConnected(false);
+      setActiveSession(null);
+      setIsHostOnline(false);
+      if (reason === "io server disconnect")
+        setError("Disconnected by server.");
+    };
 
-        const socketUrl =
-          process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8080";
+    const onSessionStarted = (session: ActiveSession) => {
+      if (!isMounted) return;
+      setActiveSession(session);
+      router.push(`/group/${groupId}/attend`);
+    };
 
-        socketInstance = io(socketUrl, {
-          auth: { token: ticket },
-          reconnectionAttempts: 5,
-          reconnectionDelay: 2000, // 2 seconds between attempts
-        });
-
-        socketRef.current = socketInstance;
-
-        // Set up event listeners
-        socketInstance.on("connect", () => {
-          if (!isMounted) return;
-
-          console.log(`[Socket.IO] Connected: ${socketInstance?.id}`);
-
-          setSocket(socketInstance);
-          setIsConnected(true);
-          setError(null);
-
-          socketInstance?.emit("get_host_status", (isOnline: boolean) => {
-            if (isMounted) {
-              console.log(
-                `[Socket.IO] Initial host status received: ${isOnline}`,
-              );
-              setIsHostOnline(isOnline);
-            }
-          });
-        });
-
-        // Handle disconnections and errors
-        socketInstance.on("disconnect", (reason) => {
-          if (!isMounted) return;
-
-          console.log(`[Socket.IO] Disconnected: ${reason}`);
-
-          setIsConnected(false);
-          setActiveSession(null);
-          setIsHostOnline(false);
-
-          if (reason === "io server disconnect")
-            setError("Disconnected by server. Please refresh.");
-        });
-
-        // Handle connection errors
-        socketInstance.on("connect_error", (err) => {
-          if (isMounted) setError(err.message);
-        });
-
-        // Handle session started event
-        socketInstance.on("session_started", (session) => {
-          if (isMounted) {
-            console.log("[Socket.IO] session_started", session);
-            setActiveSession(session);
-          }
-        });
-
-        // Handle participant confirmed event
-        socketInstance.on("participant_confirmed", (member) => {
-          console.log("[Socket.IO] participant_confirmed", member);
-        });
-
-        // Handle session finalized event
-        socketInstance.on("session_finalized", (data) => {
-          console.log("[Socket.IO] session_finalized", data);
-          setActiveSession(null);
-          if (typeof window !== "undefined") {
-            const path = window.location.pathname;
-
-            if (path.includes("/attend")) {
-              const parts = path.split("/");
-              const groupId = parts[2];
-              router.push(`/group/${groupId}`);
-            }
-          }
-        });
-
-        // Handle host online events
-        socketInstance.on("host_online", () => {
-          if (isMounted) {
-            console.log("[Socket.IO] host_online");
-            setIsHostOnline(true);
-          }
-        });
-
-        // Handle host offline events
-        socketInstance.on("host_offline", () => {
-          if (isMounted) {
-            console.log("[Socket.IO] host_offline");
-            setIsHostOnline(false);
-          }
-        });
-      } catch (err: unknown) {
-        console.error("[Socket.IO] Connection error:", err);
-
-        if (isMounted)
-          setError(
-            err instanceof Error ? err.message : "Unknown error occurred",
-          );
+    const onSessionFinalized = () => {
+      if (!isMounted) return;
+      setActiveSession(null);
+      if (
+        typeof window !== "undefined" &&
+        window.location.pathname.includes("/attend")
+      ) {
+        router.push(`/group/${groupId}`);
       }
     };
 
-    connectSocket();
+    const onHostOnline = () => {
+      if (isMounted) setIsHostOnline(true);
+    };
+    const onHostOffline = () => {
+      if (isMounted) setIsHostOnline(false);
+    };
 
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", (err: Error) => {
+      if (isMounted) setError(err.message);
+    });
+    socket.on("session_started", onSessionStarted);
+    socket.on("session_finalized", onSessionFinalized);
+    socket.on("host_online", onHostOnline);
+    socket.on("host_offline", onHostOffline);
+
+    // CLEANUP
     return () => {
       isMounted = false;
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("connect_error");
+      socket.off("session_started", onSessionStarted);
+      socket.off("session_finalized", onSessionFinalized);
+      socket.off("host_online", onHostOnline);
+      socket.off("host_offline", onHostOffline);
 
-      if (socketRef.current) {
-        console.log("[Socket.IO] Cleaning up socket...");
-
-        socketRef.current.off("connect");
-        socketRef.current.off("disconnect");
-        socketRef.current.off("connect_error");
-        socketRef.current.off("session_started");
-        socketRef.current.off("participant_confirmed");
-        socketRef.current.off("session_finalized");
-        socketRef.current.off("host_online");
-        socketRef.current.off("host_offline");
-
-        setSocket(null);
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
+      socket.emit("leave_group", groupId);
     };
-  }, [groupId]);
+  }, [socket, groupId, router]);
 
-  const confirmPresence = useCallback((sessionId: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      // Use socketRef.current to avoid stale closures during rapid state updates
-      const currentSocket = socketRef.current;
+  // ACTIONS
+  const confirmPresence = useCallback(
+    (sessionId: string): Promise<boolean> => {
+      return new Promise((resolve) => {
+        if (!socket || !socket.connected) {
+          resolve(false);
+          return;
+        }
+        let resolved = false;
+        const timeout = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            resolve(false);
+          }
+        }, 4000);
 
-      if (!currentSocket || !currentSocket.connected) {
-        console.warn("[Socket.IO] Cannot confirm presence: not connected.");
-        resolve(false);
-        return;
-      }
-
-      currentSocket.emit("confirm_presence", sessionId, (success: boolean) => {
-        resolve(success);
+        socket.emit("confirm_presence", sessionId, (success: boolean) => {
+          if (resolved) return;
+          resolved = true;
+          clearTimeout(timeout);
+          resolve(success);
+        });
       });
-    });
-  }, []);
+    },
+    [socket],
+  );
 
   return {
     socket,

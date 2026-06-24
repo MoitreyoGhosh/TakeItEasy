@@ -11,6 +11,7 @@ export interface IAttendanceSession extends Document {
   absentMembers: mongoose.Schema.Types.ObjectId[];
 
   manualRequests: {
+    notificationId: mongoose.Schema.Types.ObjectId;
     student: mongoose.Schema.Types.ObjectId;
     reason?: string;
     status: "pending" | "approved" | "rejected";
@@ -63,6 +64,12 @@ const AttendanceSessionSchema: Schema<IAttendanceSession> = new Schema(
 
     manualRequests: [
       {
+        notificationId: {
+          type: Schema.Types.ObjectId,
+          ref: "Notification",
+          required: true,
+          index: true,
+        },
         student: {
           type: Schema.Types.ObjectId,
           ref: "User",

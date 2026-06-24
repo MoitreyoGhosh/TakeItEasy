@@ -1,182 +1,333 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useSocket } from "@/hooks/useSocket";
 import { toast } from "sonner";
-
-type ManualRequest = {
-  studentId: string;
-  sessionId: string;
-  reason?: string;
-};
+import { LoaderCircle } from "lucide-react";
+import { useNotifications } from "@/providers/NotificationProvider";
+import { ManualRequestNotification } from "@/types/notifications";
 
 interface PopulatedMember {
   _id: string;
   name: string;
-  email: string;
   profile?: {
-    universityRollNo?: string;
-    classRollNo?: string;
     fullName?: string;
+    universityRollNo?: string;
   } | null;
+}
+
+interface TransformedNotification {
+  databaseId: string;
+  sessionId: string;
+  studentId: string;
+  name?: string;
+  rollNo?: string;
+  reason?: string;
+  createdAt?: string;
+  read?: boolean;
 }
 
 export function ManualAttendancePanel({
   groupId,
   members,
-  rosterMap,
   sessionId,
   onManualApprove,
 }: {
   groupId: string;
   members?: PopulatedMember[];
-  rosterMap?: React.MutableRefObject<Map<string, PopulatedMember>>;
   sessionId?: string;
   onManualApprove?: (studentId: string) => void;
 }) {
-  const { socket } = useSocket({ groupId });
+  const [isLoading, setIsLoading] = useState(true);
+  const [localRequests, setLocalRequests] = useState<
+    ManualRequestNotification[]
+  >([]);
+  const processingRef = useRef<Set<string>>(new Set());
 
-  const [manualRequests, setManualRequests] = useState<ManualRequest[]>([]);
+  const {
+    notifications,
+    hydrateNotifications,
+    markAsRead,
+    archiveNotification,
+    approveNotification,
+    rejectNotification,
+    hideNotification,
+  } = useNotifications();
 
+  // Hydrate pending requests on mount
   useEffect(() => {
-    if (!socket) return;
+    if (!sessionId) {
+      setIsLoading(false);
+      return;
+    }
 
-    const handleManualRequest = (data: ManualRequest) => {
-      setManualRequests((prev) => {
-        const exists = prev.some(
-          (req) =>
-            req.studentId === data.studentId &&
-            req.sessionId === data.sessionId,
-        );
-        if (exists) {
-          toast.info("Duplicate manual attendance request received, ignoring.");
-          return prev;
+    const fetchPendingRequests = async () => {
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}/manual-requests`);
+
+        if (!res.ok) {
+          throw new Error("Failed to hydrate requests");
         }
 
-        return [...prev, data];
-      });
+        const data = await res.json();
 
-      toast.info("Manual attendance request received");
+        // Transform API response to match ManualRequestNotification structure
+        const transformedNotifications: ManualRequestNotification[] = data.map(
+          (req: TransformedNotification) => ({
+            id: `manual_${req.databaseId}`,
+            databaseId: req.databaseId,
+            type: "manual_request",
+            createdAt: new Date(req.createdAt || Date.now()).getTime(),
+            read: req.read ?? false,
+            status: "pending",
+            archived: false,
+            data: {
+              sessionId: req.sessionId,
+              groupId,
+              studentId: req.studentId,
+              name: req.name,
+              rollNo: req.rollNo,
+              reason: req.reason,
+            },
+          }),
+        );
+
+        hydrateNotifications(transformedNotifications);
+      } catch (error) {
+        console.error("Hydration failed:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    socket.on("manual_attendance_request", handleManualRequest);
+    fetchPendingRequests();
+  }, [sessionId, groupId, hydrateNotifications]);
 
-    return () => {
-      socket.off("manual_attendance_request", handleManualRequest);
-    };
-  }, [socket]);
+  // Sync local pending requests with global notifications
+  useEffect(() => {
+    const filtered = notifications.filter(
+      (n): n is ManualRequestNotification =>
+        n.type === "manual_request" &&
+        n.data.groupId === groupId &&
+        !n.archived &&
+        n.status !== "approved" &&
+        n.status !== "rejected",
+    );
 
+    setLocalRequests(filtered);
+  }, [notifications, groupId]);
+
+  // Approve manual attendance
   const approveManualAttendance = async (
     studentId: string,
-    sessionId: string,
+    reqSessionId: string,
   ) => {
+    const notification = localRequests.find(
+      (req) =>
+        req.data.studentId === studentId && req.data.sessionId === reqSessionId,
+    );
+
+    if (!notification) {
+      return;
+    }
+    const uiId = notification.id;
+
+    if (processingRef.current.has(uiId)) {
+      return;
+    }
+
+    processingRef.current.add(uiId);
+
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/manual-add`, {
+      const res = await fetch(`/api/sessions/${reqSessionId}/manual-add`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ studentId }),
+        body: JSON.stringify({
+          studentId,
+        }),
       });
 
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        throw new Error();
+      }
 
-      setManualRequests((prev) =>
-        prev.filter((req) => req.studentId !== studentId),
-      );
+      // Persist archive in MongoDB
+      if (notification.databaseId) {
+        await fetch(`/api/notifications/${notification.databaseId}/archive`, {
+          method: "PATCH",
+        });
+      }
 
+      // Remove locally immediately
+      setLocalRequests((prev) => prev.filter((req) => req.id !== uiId));
+
+      // Sync provider
+      markAsRead(uiId);
+      archiveNotification(uiId);
+      approveNotification(uiId);
+      hideNotification(uiId);
+
+      toast.success("Attendance approved");
       onManualApprove?.(studentId);
     } catch {
       toast.error("Failed to approve attendance");
+    } finally {
+      processingRef.current.delete(uiId);
     }
   };
 
+  // Reject manual attendance
   const rejectManualAttendance = async (
     studentId: string,
-    requestSessionId: string,
+    reqSessionId: string,
   ) => {
+    const notification = localRequests.find(
+      (req) =>
+        req.data.studentId === studentId && req.data.sessionId === reqSessionId,
+    );
+
+    if (!notification) {
+      return;
+    }
+    const uiId = notification.id;
+
+    if (processingRef.current.has(uiId)) {
+      return;
+    }
+    processingRef.current.add(uiId);
+
     try {
-      const res = await fetch(
-        `/api/sessions/${requestSessionId}/manual-reject`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ studentId }),
+      const res = await fetch(`/api/sessions/${reqSessionId}/manual-reject`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          studentId,
+        }),
+      });
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to reject request.");
+        throw new Error(errorData.message);
       }
 
-      setManualRequests((prev) =>
-        prev.filter((req) => req.studentId !== studentId),
-      );
+      // Persist archive in MongoDB
+      if (notification.databaseId) {
+        await fetch(`/api/notifications/${notification.databaseId}/archive`, {
+          method: "PATCH",
+        });
+      }
 
-      toast.info("Manual attendance request rejected.");
+      // Remove locally immediately
+      setLocalRequests((prev) => prev.filter((req) => req.id !== uiId));
+
+      // Sync provider
+      markAsRead(uiId);
+      archiveNotification(uiId);
+      rejectNotification(uiId);
+      hideNotification(uiId);
+
+      toast.info("Request rejected");
     } catch (error: unknown) {
-      toast.error((error as Error).message || "Failed to reject attendance.");
+      toast.error((error as Error).message || "Failed to reject attendance");
+    } finally {
+      processingRef.current.delete(uiId);
     }
   };
 
-  const getMember = (id: string) => {
-    if (rosterMap) return rosterMap.current.get(id);
-    if (members) return members.find((m) => m._id === id);
-    return null;
+  // Helper to get member info for fallback display when name/rollNo is missing in the notification
+  const getFallbackMember = (id: string) => {
+    return members?.find((m) => m._id === id);
   };
 
-  if (manualRequests.length === 0) return null;
+  // Show loading state while fetching pending requests
+  if (isLoading) {
+    return (
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">
+            Manual Attendance Requests
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="flex justify-center py-4">
+          <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // If there are no pending requests, don't render anything
+  if (localRequests.length === 0) {
+    return null;
+  }
 
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-sm animate-fade-in">
       <CardHeader>
         <CardTitle className="text-sm font-medium">
-          Manual Attendance Requests
+          Pending Requests ({localRequests.length})
         </CardTitle>
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {manualRequests.map((req) => {
-          const member = getMember(req.studentId);
+        {localRequests.map((req) => {
+          const fallback = getFallbackMember(req.data.studentId);
+
+          const name =
+            req.data.name ||
+            fallback?.profile?.fullName ||
+            fallback?.name ||
+            "Unknown Student";
+
+          const roll =
+            req.data.rollNo || fallback?.profile?.universityRollNo || "";
 
           return (
             <div
-              key={req.studentId}
-              className="flex items-center justify-between border p-2 rounded-md"
+              key={req.id}
+              className="flex items-center justify-between border p-3 rounded-md bg-background"
             >
               <div>
-                <p className="text-sm font-medium">
-                  {member?.profile?.fullName || member?.name || "Student"}
-                </p>
+                <p className="text-sm font-medium">{name}</p>
 
-                <p className="text-xs text-muted-foreground">
-                  {member?.profile?.universityRollNo || ""}
-                </p>
+                <p className="text-xs text-muted-foreground">{roll}</p>
 
-                {req.reason && (
-                  <p className="text-xs text-muted-foreground">
-                    Reason: {req.reason}
+                {req.data.reason && (
+                  <p className="text-xs text-muted-foreground italic mt-1">
+                    "{req.data.reason}"
                   </p>
                 )}
               </div>
 
               <div className="flex gap-2">
                 <Button
+                  size="sm"
+                  disabled={processingRef.current.has(req.id)}
                   onClick={() =>
-                    approveManualAttendance(req.studentId, req.sessionId)
+                    approveManualAttendance(
+                      req.data.studentId,
+                      req.data.sessionId,
+                    )
                   }
                 >
                   Approve
                 </Button>
 
                 <Button
+                  size="sm"
                   variant="destructive"
-                  onClick={() => rejectManualAttendance(req.studentId, req.sessionId)}
+                  disabled={processingRef.current.has(req.id)}
+                  onClick={() =>
+                    rejectManualAttendance(
+                      req.data.studentId,
+                      req.data.sessionId,
+                    )
+                  }
                 >
                   Reject
                 </Button>

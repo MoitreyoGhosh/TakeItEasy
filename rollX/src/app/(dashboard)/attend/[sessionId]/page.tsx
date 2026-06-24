@@ -50,34 +50,41 @@ export default function EvaluationPage({
 
   useEffect(() => {
     let isMounted = true;
+    let retryTimeout: NodeJS.Timeout;
 
-    // Sequence: 1. Wait for connection -> 2. Emit confirm_presence
-    const verify = async () => {
-      if (isConnected && groupId && verificationStatus === "pending") {
-        const success = await confirmPresence(params.sessionId);
-        if (isMounted) {
-          setVerificationStatus(success ? "confirmed" : "failed");
-          if (!success) {
-            toast.error(
-              "Failed to verify presence. Please try submitting the code again.",
-            );
-          }
-        }
+    const verifyPresence = async (attempt = 1) => {
+      if (!isMounted) return;
+
+      if (!isConnected || !groupId) {
+        retryTimeout = setTimeout(() => verifyPresence(attempt), 1000);
+        return;
       }
-    };
 
-    verify();
+      const success = await confirmPresence(params.sessionId);
+
+      if (!isMounted) return;
+
+      if (success) {
+        setVerificationStatus("confirmed");
+        toast.success("Attendance confirmed!");
+        return;
+      }
+
+      // Retry up to 5 times
+      if (attempt < 5) {
+        retryTimeout = setTimeout(() => verifyPresence(attempt + 1), 1200);
+        return;
+      }
+      setVerificationStatus("failed");
+      toast.error("Failed to verify presence. Please try again.");
+    };
+    verifyPresence();
 
     return () => {
       isMounted = false;
+      clearTimeout(retryTimeout);
     };
-  }, [
-    isConnected,
-    groupId,
-    params.sessionId,
-    confirmPresence,
-    verificationStatus,
-  ]);
+  }, [isConnected, groupId, params.sessionId, confirmPresence]);
 
   // Listen for the session to end
   useEffect(() => {

@@ -34,17 +34,37 @@ app.post(
   internalApiAuthMiddleware, // Apply security middleware first
   (req, res) => {
     try {
-      const { sessionId, groupId, duration } = req.body;
+      const {
+        sessionId,
+        groupId,
+        duration,
+        studentIds,
+        notificationMap,
+        groupName,
+      } = req.body;
 
       // Validate the incoming data
-      if (!sessionId || !groupId || !duration) {
+      if (
+        !sessionId ||
+        !groupId ||
+        !duration ||
+        !studentIds ||
+        !notificationMap
+      ) {
         return res
           .status(400)
           .json({ message: "Missing required session data." });
       }
 
       // Delegate the logic to our session manager
-      startSession(sessionId, groupId, duration);
+      startSession(
+        sessionId,
+        groupId,
+        duration,
+        studentIds || [],
+        notificationMap || [],
+        groupName,
+      );
 
       res.status(200).json({ message: "Session successfully initiated." });
     } catch (error) {
@@ -85,22 +105,37 @@ app.post(
 app.post(
   "/api/internal/manual-reject",
   internalApiAuthMiddleware,
-  (req, res) => {
+  async (req, res) => {
     try {
       const { sessionId, studentId, groupId } = req.body;
 
       const roomName = `group-${groupId}`;
-      io.to(roomName).emit("manual_attendance_rejected", {
-        studentId,
-        sessionId,
+
+      // Fetch all connected sockets inside this classroom
+      const sockets = await io.in(roomName).fetchSockets();
+
+      sockets.forEach((socket) => {
+        // Notify ONLY the student whose request was rejected
+        if (
+          socket.data.role === "Student" &&
+          socket.data.userId === studentId
+        ) {
+          socket.emit("manual_attendance_rejected", {
+            studentId,
+            sessionId,
+          });
+        }
       });
 
-      res
-        .status(200)
-        .json({ message: "Manual attendance rejected and broadcasted." });
+      res.status(200).json({
+        message: "Manual attendance rejection sent successfully.",
+      });
     } catch (error) {
       console.error("[API Error] /manual-reject failed:", error);
-      res.status(500).json({ message: "Internal server error." });
+
+      res.status(500).json({
+        message: "Internal server error.",
+      });
     }
   },
 );
@@ -109,23 +144,39 @@ app.post(
 app.post(
   "/api/internal/new-manual-request",
   internalApiAuthMiddleware,
-  (req, res) => {
+  async (req, res) => {
     try {
-      const { sessionId, studentId, groupId, reason } = req.body;
+      const {
+        sessionId,
+        studentId,
+        groupId,
+        hostId,
+        reason,
+        name,
+        rollNo,
+        notificationId,
+      } = req.body;
 
-      const roomName = `group-${groupId}`;
-
-      // Relay the request event to the Host
-      io.to(roomName).emit("manual_attendance_request", {
+      // Send directly to host personal room
+      io.to(`user-${hostId}`).emit("manual_attendance_request", {
+        notificationId,
         studentId,
         sessionId,
+        groupId,
         reason,
+        name,
+        rollNo,
       });
 
-      res.status(200).json({ message: "Manual request broadcasted to host." });
+      res.status(200).json({
+        message: "Manual request sent to host successfully.",
+      });
     } catch (error) {
       console.error("[API Error] /new-manual-request failed:", error);
-      res.status(500).json({ message: "Internal server error." });
+
+      res.status(500).json({
+        message: "Internal server error.",
+      });
     }
   },
 );

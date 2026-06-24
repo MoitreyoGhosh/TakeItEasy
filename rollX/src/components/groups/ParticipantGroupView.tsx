@@ -434,7 +434,6 @@ export function ParticipantGroupView({ group }: { group: SerializedGroup }) {
             />
 
             {!activeSession &&
-              isHostOnline &&
               recentSessionId &&
               manualRequestStatus !== "approved" &&
               !attemptsExhausted && (
